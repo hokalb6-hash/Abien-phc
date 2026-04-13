@@ -1,7 +1,14 @@
 /**
  * نطق عربي مجاني عبر خدمة Microsoft Edge Read Aloud (بدون مفتاح API).
  * يُرجع { audioBase64 } ليتوافق مع src/lib/ttsEdge.ts و supabase.functions.invoke.
+ *
+ * ملاحظة: WebSocket المدمج في بعض بيئات Edge يفسّر المعامل الثاني كـ subprotocols فقط
+ * → "Invalid protocol value" عند تمرير { headers }. نستخدم npm:ws كما في حزمة edge-tts.
  */
+import { Buffer } from 'node:buffer'
+// @ts-expect-error معرّف عند النشر (Deno npm: / Supabase Edge)
+import WebSocket from 'npm:ws@8.18.0'
+
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -65,8 +72,22 @@ function connectId(): string {
   return crypto.randomUUID().replace(/-/g, '')
 }
 
+function wsRawToUint8(raw: unknown): Uint8Array {
+  if (Buffer.isBuffer(raw)) return new Uint8Array(raw)
+  if (raw instanceof ArrayBuffer) return new Uint8Array(raw)
+  if (raw instanceof Uint8Array) return raw
+  if (typeof raw === 'string') return new TextEncoder().encode(raw)
+  return new Uint8Array()
+}
+
+function wsRawToUtf8(raw: unknown): string {
+  if (typeof raw === 'string') return raw
+  if (Buffer.isBuffer(raw)) return raw.toString('utf8')
+  return new TextDecoder('utf-8', { fatal: false }).decode(wsRawToUint8(raw))
+}
+
 /**
- * يطابق منطق مكتبة edge-tts الخفيفة: WebSocket + SSML → مقاطع MP3.
+ * WebSocket + SSML → MP3 (نفس بروتوكول edge-tts عبر مكتبة ws).
  */
 function synthesizeEdgeReadAloud(text: string, voice: string): Promise<Uint8Array> {
   const audioSep = new TextEncoder().encode('Path:audio\r\n')
@@ -75,16 +96,14 @@ function synthesizeEdgeReadAloud(text: string, voice: string): Promise<Uint8Arra
   return new Promise((resolve, reject) => {
     let settled = false
     const url = `${WS_PATH}&ConnectionId=${connectId()}`
-    // Deno / Supabase Edge يدعمان headers هنا؛ تعريف TypeScript الافتراضي لـ WebSocket لا يتضمنها.
     const ws = new WebSocket(url, {
+      host: 'speech.platform.bing.com',
+      origin: 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
       headers: {
-        Host: 'speech.platform.bing.com',
-        Origin: 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.66 Safari/537.36 Edg/103.0.1264.44',
       },
-    } as unknown as string[])
-    ws.binaryType = 'arraybuffer'
+    })
 
     const timer = setTimeout(() => {
       finish(new Error('انتهت مهلة توليد الصوت'))
@@ -104,9 +123,11 @@ function synthesizeEdgeReadAloud(text: string, voice: string): Promise<Uint8Arra
       else reject(new Error('لا يوجد صوت'))
     }
 
-    ws.onerror = () => finish(new Error('فشل اتصال TTS'))
+    ws.on('error', (e: unknown) => {
+      finish(e instanceof Error ? e : new Error('فشل اتصال TTS'))
+    })
 
-    ws.onopen = () => {
+    ws.on('open', () => {
       const speechConfig = JSON.stringify({
         context: {
           synthesis: {
@@ -129,38 +150,30 @@ function synthesizeEdgeReadAloud(text: string, voice: string): Promise<Uint8Arra
           text,
         )}</prosody></voice></speak>`
       ws.send(ssmlMessage)
-    }
+    })
 
-    ws.onmessage = (ev) => {
-      void (async () => {
-        try {
-          if (typeof ev.data === 'string') {
-            if (ev.data.includes('turn.end')) {
-              const merged = concatUint8(chunks)
-              if (merged.length === 0) {
-                finish(new Error('لم يُستلم صوت'))
-                return
-              }
-              finish(null, merged)
+    ws.on('message', (rawData: unknown, isBinary: boolean) => {
+      try {
+        if (!isBinary) {
+          const data2 = wsRawToUtf8(rawData)
+          if (data2.includes('turn.end')) {
+            const merged = concatUint8(chunks)
+            if (merged.length === 0) {
+              finish(new Error('لم يُستلم صوت'))
+              return
             }
-            return
+            finish(null, merged)
           }
-          let buf: ArrayBuffer
-          if (ev.data instanceof ArrayBuffer) buf = ev.data
-          else if (ev.data instanceof Blob) buf = await ev.data.arrayBuffer()
-          else {
-            finish(new Error('نوع رسالة غير مدعوم'))
-            return
-          }
-          const data = new Uint8Array(buf)
-          const idx = indexOfSubarray(data, audioSep)
-          if (idx === -1) return
-          chunks.push(data.subarray(idx + audioSep.length))
-        } catch (e) {
-          finish(e instanceof Error ? e : new Error(String(e)))
+          return
         }
-      })()
-    }
+        const data = wsRawToUint8(rawData)
+        const idx = indexOfSubarray(data, audioSep)
+        if (idx === -1) return
+        chunks.push(data.subarray(idx + audioSep.length))
+      } catch (e) {
+        finish(e instanceof Error ? e : new Error(String(e)))
+      }
+    })
   })
 }
 
