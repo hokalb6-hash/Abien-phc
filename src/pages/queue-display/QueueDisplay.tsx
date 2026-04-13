@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
 import { Volume2, VolumeX } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { SITE_DEVELOPER_CREDIT_AR } from '../../constants/brand'
 import { CLINIC_TYPES } from '../../constants/clinics'
 import type { Patient, Queue } from '../../types/db'
 import { todayAdenYMD } from '../../utils/adenCalendar'
@@ -272,7 +273,7 @@ export default function QueueDisplay() {
       )}
 
       <footer className="mx-auto mt-12 max-w-7xl border-t border-slate-800 pt-6 text-center text-sm text-slate-500">
-        مبرمج النظام: م.محمد شعبان ريمه
+        {SITE_DEVELOPER_CREDIT_AR}
       </footer>
     </div>
   )

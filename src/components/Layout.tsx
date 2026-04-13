@@ -3,6 +3,7 @@ import { Link, Outlet } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
 import { useAuthStore } from '../store/authStore'
 import { useUiStore } from '../store/uiStore'
+import { SITE_DEVELOPER_CREDIT_AR } from '../constants/brand'
 import { BrandMark } from './BrandMark'
 import { Sidebar } from './Sidebar'
 import { Button } from './ui/Button'
@@ -59,6 +60,9 @@ export function Layout() {
         <main className="flex-1 overflow-auto p-4 md:p-6">
           <Outlet />
         </main>
+        <footer className="shrink-0 border-t border-slate-200 bg-white px-4 py-2.5 text-center text-[11px] text-slate-500">
+          {SITE_DEVELOPER_CREDIT_AR}
+        </footer>
       </div>
     </div>
   )

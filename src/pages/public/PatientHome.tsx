@@ -10,6 +10,7 @@ import {
 import { BrandMark } from '../../components/BrandMark'
 import { PatientAnnouncementBanner } from '../../components/PatientAnnouncementBanner'
 import { Card } from '../../components/ui/Card'
+import { SITE_DEVELOPER_CREDIT_AR } from '../../constants/brand'
 import { isSupabaseConfigured } from '../../lib/supabase'
 
 /**
@@ -275,18 +276,21 @@ export default function PatientHome() {
         </div>
       </section>
 
-      <footer className="border-t border-white/5 px-4 py-6 text-center text-xs text-slate-600">
-        الصور مُخزَّنة مع الموقع في مجلد <code className="text-slate-500">public/landing</code> لتظهر حتى دون اتصال
-        خارجي؛ المصدر الأصلي للتصوير المخزَّن:{' '}
-        <a
-          href="https://unsplash.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-slate-500 underline decoration-slate-700 underline-offset-2 transition hover:text-slate-400"
-        >
-          Unsplash
-        </a>
-        .
+      <footer className="space-y-3 border-t border-white/5 px-4 py-6 text-center text-xs text-slate-600">
+        <p className="font-medium text-slate-500">{SITE_DEVELOPER_CREDIT_AR}</p>
+        <p>
+          الصور مُخزَّنة مع الموقع في مجلد <code className="text-slate-500">public/landing</code> لتظهر حتى دون اتصال
+          خارجي؛ المصدر الأصلي للتصوير المخزَّن:{' '}
+          <a
+            href="https://unsplash.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-slate-500 underline decoration-slate-700 underline-offset-2 transition hover:text-slate-400"
+          >
+            Unsplash
+          </a>
+          .
+        </p>
       </footer>
     </div>
   )

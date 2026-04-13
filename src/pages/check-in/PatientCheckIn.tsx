@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { toast } from 'react-hot-toast'
 import { supabase } from '../../lib/supabase'
 import { LOCAL_TIMEZONE_LABEL_AR, tomorrowAdenYMD } from '../../utils/adenCalendar'
+import { SITE_DEVELOPER_CREDIT_AR } from '../../constants/brand'
 import { BrandMark } from '../../components/BrandMark'
 import { PatientAnnouncementBanner } from '../../components/PatientAnnouncementBanner'
 import { Card } from '../../components/ui/Card'
@@ -344,6 +345,10 @@ export default function PatientCheckIn() {
             دخول الموظفين
           </Link>
         </p>
+
+        <footer className="mt-8 border-t border-slate-200/80 pt-4 text-center text-xs text-slate-500">
+          {SITE_DEVELOPER_CREDIT_AR}
+        </footer>
       </div>
 
       {bookingResult ? (
