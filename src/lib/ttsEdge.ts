@@ -1,3 +1,4 @@
+import { FunctionsHttpError, FunctionsRelayError } from '@supabase/functions-js'
 import { isSupabaseConfigured, supabase } from './supabase'
 
 let currentAudio: HTMLAudioElement | null = null
@@ -66,22 +67,47 @@ export type EdgeTtsPlayResult =
   | { ok: true }
   | { ok: false; message: string }
 
-function formatInvokeFailure(error: unknown, data: unknown): string {
+async function describeFunctionInvokeError(error: unknown, data: unknown): Promise<string> {
+  if (error instanceof FunctionsHttpError) {
+    const r = error.context as Response
+    const status = r.status
+    try {
+      const ct = (r.headers.get('content-type') || '').toLowerCase()
+      if (ct.includes('application/json')) {
+        const j = (await r.json()) as { error?: unknown; message?: unknown }
+        const detail =
+          j.error != null
+            ? String(j.error).trim()
+            : j.message != null
+              ? String(j.message).trim()
+              : ''
+        if (detail) return `HTTP ${status}: ${detail}`
+        const s = JSON.stringify(j)
+        if (s && s !== '{}') return `HTTP ${status}: ${s.slice(0, 400)}`
+      } else {
+        const text = (await r.text()).trim()
+        if (text) return `HTTP ${status}: ${text.slice(0, 400)}`
+      }
+    } catch {
+      /* ignore parse errors */
+    }
+    if (status === 401 || status === 403) {
+      return `HTTP ${status}: غير مصرّح — تحقق من VITE_SUPABASE_ANON_KEY ومن إعداد JWT للدالة في Supabase.`
+    }
+    if (status === 404) {
+      return `HTTP 404: الدالة غير موجودة — انشرها: npx supabase functions deploy tts-announce --project-ref <مرجعك>.`
+    }
+    if (status === 502 || status === 503) {
+      return `HTTP ${status}: فشل تنفيذ الدالة (غالباً TTS أو شبكة) — راجع Logs لـ tts-announce في لوحة Supabase.`
+    }
+    return `HTTP ${status}: ردّ غير ناجح من Edge Function.`
+  }
+  if (error instanceof FunctionsRelayError) {
+    return `Relay: ${error.message}`
+  }
   if (error != null && typeof error === 'object') {
     const e = error as Record<string, unknown>
     const msg = typeof e.message === 'string' ? e.message.trim() : ''
-    const ctx = e.context as Record<string, unknown> | undefined
-    const body = ctx && typeof ctx.body === 'string' ? ctx.body : ''
-    if (body) {
-      try {
-        const j = JSON.parse(body) as { error?: unknown }
-        if (j.error != null && String(j.error).trim()) {
-          return String(j.error).trim()
-        }
-      } catch {
-        if (body.length < 200) return body
-      }
-    }
     if (msg) return msg
   }
   if (data && typeof data === 'object' && data !== null && 'error' in data) {
@@ -102,7 +128,7 @@ export async function playSpeechViaEdgeTts(text: string): Promise<EdgeTtsPlayRes
       body: { text: trimmed.slice(0, 500) },
     })
     if (error) {
-      const message = formatInvokeFailure(error, data)
+      const message = await describeFunctionInvokeError(error, data)
       console.warn('[tts-announce]', error, data)
       return { ok: false, message }
     }
