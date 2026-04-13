@@ -92,7 +92,7 @@ async function describeFunctionInvokeError(error: unknown, data: unknown): Promi
       /* ignore parse errors */
     }
     if (status === 401 || status === 403) {
-      return `HTTP ${status}: غير مصرّح — تحقق من VITE_SUPABASE_ANON_KEY ومن إعداد JWT للدالة في Supabase.`
+      return `HTTP ${status}: غير مصرّح — تحقق من VITE_SUPABASE_ANON_KEY (نفس مشروع الرابط) وإعادة بناء الموقع. إن ظهر Invalid JWT: غالباً جلسة مستخدم منتهية على نفس المتصفح؛ الاستدعاء يُجبر مفتاح anon تلقائياً في الإصدار الحديث.`
     }
     if (status === 404) {
       return `HTTP 404: الدالة غير موجودة — انشرها: npx supabase functions deploy tts-announce --project-ref <مرجعك>.`
@@ -123,9 +123,21 @@ export async function playSpeechViaEdgeTts(text: string): Promise<EdgeTtsPlayRes
   }
   const trimmed = text.trim()
   if (!trimmed) return { ok: false, message: 'نص فارغ.' }
+  /**
+   * supabase-js يضع في Authorization جلسة المستخدم إن وُجدت؛ توكن منتهٍ = Invalid JWT عند verify_jwt.
+   * شاشة الدور قد تفتح بعد تسجيل دخول أدمن على نفس الجهاز — نُجبر مفتاح anon الصريح (مع apikey).
+   */
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()
+  if (!anonKey) {
+    return { ok: false, message: 'VITE_SUPABASE_ANON_KEY غير معرّف.' }
+  }
   try {
     const { data, error } = await supabase.functions.invoke('tts-announce', {
       body: { text: trimmed.slice(0, 500) },
+      headers: {
+        Authorization: `Bearer ${anonKey}`,
+        apikey: anonKey,
+      },
     })
     if (error) {
       const message = await describeFunctionInvokeError(error, data)
