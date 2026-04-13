@@ -1,9 +1,8 @@
 /**
- * إعلان صوتي: مسار Edge TTS المجاني (MP3 base64 من دالة tts-announce) عند VITE_USE_EDGE_TTS=1، ثم احتياطي Web Speech.
- * شاشات التلفاز غالباً تعطّل speechSynthesis بينما Web Audio (الصفارة) يعمل — لا يُعتمد على المحلي وحده.
+ * إعلان صوتي عبر Web Speech في المتصفح + جرس Web Audio.
+ * مناسب عند عرض شاشة الدور من لابتوب موصول بالشاشة (Chrome/Edge).
  */
 import { playCallChime, primeCallAudioInUserGesture } from './callChime'
-import { edgeTtsEnabled, playSpeechViaEdgeTts, stopEdgeTtsPlayback } from '../lib/ttsEdge'
 
 const SILENT_WAV =
   'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA='
@@ -122,10 +121,9 @@ async function drainAnnouncementQueue(): Promise<void> {
     return
   }
 
-  const canEdge = edgeTtsEnabled()
   const canNative = typeof window.speechSynthesis !== 'undefined'
 
-  if (!canEdge && !canNative) {
+  if (!canNative) {
     announcementQueue = []
     announcementProcessing = false
     return
@@ -145,14 +143,6 @@ async function drainAnnouncementQueue(): Promise<void> {
       await new Promise<void>((r) => setTimeout(r, 200))
     }
 
-    if (canEdge) {
-      const tts = await playSpeechViaEdgeTts(item.text)
-      if (tts.ok) return
-      console.warn('[tts-announce]', tts.message)
-    }
-
-    if (!canNative) return
-
     const delayMs = chimePlayed ? 48 : item.withChime ? 160 : 48
     await speakNativeItem(item, delayMs)
   } finally {
@@ -164,7 +154,6 @@ async function drainAnnouncementQueue(): Promise<void> {
 function clearArabicAnnouncementQueue() {
   announcementQueue = []
   announcementProcessing = false
-  stopEdgeTtsPlayback()
   if (typeof window !== 'undefined' && window.speechSynthesis) {
     window.speechSynthesis.cancel()
   }
@@ -172,7 +161,7 @@ function clearArabicAnnouncementQueue() {
 
 export function enqueueArabicAnnouncement(text: string, opts?: { withChime?: boolean }) {
   if (typeof window === 'undefined') return
-  if (!edgeTtsEnabled() && !window.speechSynthesis) return
+  if (!window.speechSynthesis) return
   primeSpeechVoices()
   announcementQueue.push({ text, withChime: opts?.withChime !== false })
   void drainAnnouncementQueue()
@@ -237,5 +226,5 @@ export function hasSpeechSynthesisAPI(): boolean {
 }
 
 export function canUseDisplayVoice(): boolean {
-  return hasSpeechSynthesisAPI() || edgeTtsEnabled()
+  return hasSpeechSynthesisAPI()
 }

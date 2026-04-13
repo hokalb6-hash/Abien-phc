@@ -8,7 +8,6 @@ import type { Patient, Queue } from '../../types/db'
 import { todayAdenYMD } from '../../utils/adenCalendar'
 import { clinicTypeLabel, formatQueueNumber, queueStatusLabel } from '../../utils/format'
 import { playCallChime, resumeCallAudioContext } from '../../utils/callChime'
-import { edgeTtsEnabled, playSpeechViaEdgeTts } from '../../lib/ttsEdge'
 import {
   canUseDisplayVoice,
   enqueueArabicAnnouncement,
@@ -183,7 +182,7 @@ export default function QueueDisplay() {
     primeDisplayVoiceInUserGesture()
     if (!canUseDisplayVoice()) {
       toast.error(
-        'لا يتوفر إعلان صوتي بهذا الإعداد. للشاشات الذكية: فعّل VITE_USE_EDGE_TTS=1 وانشر دالة tts-announce المجانية (راجع .env.example).',
+        'لا يتوفر نطق في هذا المتصفح. جرّب Chrome أو Edge من لابتوب موصول بالشاشة، أو ثبّت أصوات عربية في النظام.',
       )
       return
     }
@@ -195,25 +194,15 @@ export default function QueueDisplay() {
     }
     void resumeCallAudioContext()
     playCallChime()
-    void (async () => {
-      if (edgeTtsEnabled()) {
-        const tts = await playSpeechViaEdgeTts('تم تفعيل الإعلان الصوتي.')
-        if (tts.ok) return
-        toast.error(`تعذّر الإعلان من الخادم: ${tts.message}`)
-      }
-      if (hasSpeechSynthesisAPI()) {
-        speakArabic('تم تفعيل الإعلان الصوتي.', {
-          cancelPrior: false,
-          immediate: true,
-          onError: () => {
-            if (edgeTtsEnabled()) return
-            toast.error(
-              'الصفارة تعمل لكن نطق الأسماء محلياً غير مدعوم على هذه الشاشة. فعّل الإعلان من الخادم (VITE_USE_EDGE_TTS=1 ودالة tts-announce المجانية).',
-            )
-          },
-        })
-      }
-    })()
+    if (hasSpeechSynthesisAPI()) {
+      speakArabic('تم تفعيل الإعلان الصوتي.', {
+        cancelPrior: false,
+        immediate: true,
+        onError: () => {
+          toast.error('الصفارة تعمل؛ إن لم يُنطَق النص فجرّب متصفحاً آخر أو لابتوب موصول بالشاشة.')
+        },
+      })
+    }
   }
 
   function disableVoiceAnnouncement() {

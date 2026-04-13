@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "deploy:tts-announce": "node scripts/deploy-tts-announce.mjs"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.0",

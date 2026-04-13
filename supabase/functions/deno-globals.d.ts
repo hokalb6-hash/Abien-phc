@@ -1,4 +1,4 @@
-/** أنواع دنيا لمجلد الدوال حتى يتعرّف TypeScript في Cursor على Deno دون امتداد Deno. */
+/** أنواع دنيا لـ Edge Functions؛ وقت التشغيل الفعلي هو Deno على Supabase. */
 declare const Deno: {
-  serve(handler: (request: Request) => Response | Promise<Response>): void
+  serve: (handler: (req: Request) => Response | Promise<Response>) => void
 }
