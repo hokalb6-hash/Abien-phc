@@ -1,0 +1,9 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# تطبيق React Router (صفحات عميل) — إعادة توجيه جميع المسارات إلى index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
