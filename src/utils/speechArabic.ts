@@ -1,17 +1,13 @@
 /**
- * إعلان صوتي بالعربية (Web Speech API).
- * Chrome/Android: يجب تشغيل الصوت داخل نفس لحظة تفاعل المستخدم؛ التأخير بـ setTimeout قد يلغي التفعيل.
- * استخدم primeDisplayVoiceInUserGesture() في أول سطر من onPointerDown/onClick، ورسالة التفعيل بـ immediate: true.
+ * إعلان صوتي: مسار Edge TTS المجاني (MP3 base64 من دالة tts-announce) عند VITE_USE_EDGE_TTS=1، ثم احتياطي Web Speech.
+ * شاشات التلفاز غالباً تعطّل speechSynthesis بينما Web Audio (الصفارة) يعمل — لا يُعتمد على المحلي وحده.
  */
 import { playCallChime, primeCallAudioInUserGesture } from './callChime'
+import { edgeTtsEnabled, playSpeechViaEdgeTts, stopEdgeTtsPlayback } from '../lib/ttsEdge'
 
 const SILENT_WAV =
   'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA='
 
-/**
- * يُستدعى متزامناً مع لمس/نقر المستخدم (قبل أي await أو setState).
- * يفتح Web Audio + يستأنف speechSynthesis + يجرّب تشغيلاً صامتاً لفتح قناة HTML Audio (Chrome على الهاتف والتلفاز).
- */
 export function primeDisplayVoiceInUserGesture(): void {
   primeCallAudioInUserGesture()
   if (typeof window === 'undefined') return
@@ -37,7 +33,6 @@ type QueueItem = { text: string; withChime: boolean }
 let announcementQueue: QueueItem[] = []
 let announcementProcessing = false
 
-/** تحميل أصوات Chrome/Android الكسولة */
 function primeSpeechVoices(): void {
   if (typeof window === 'undefined' || !window.speechSynthesis) return
   try {
@@ -67,7 +62,6 @@ function pickArabicVoice(): SpeechSynthesisVoice | null {
   )
 }
 
-/** إن لم يوجد صوت عربي (شائع على التلفاز) نستخدم أي صوت متاح حتى لا يبقى النطق صامتاً */
 function pickVoiceForUtterance(): SpeechSynthesisVoice | null {
   const ar = pickArabicVoice()
   if (ar) return ar
@@ -96,64 +90,93 @@ function buildUtterance(text: string, rate: number): SpeechSynthesisUtterance {
   return u
 }
 
-/** بعد cancel() مباشرةً، WebKit/Safari وأحياناً أندرويد لا يبدأون speak — تأخير بسيط */
 function speakAfterCancel(run: () => void, delayMs: number): void {
   window.setTimeout(run, delayMs)
 }
 
-function drainAnnouncementQueue() {
+function speakNativeItem(item: QueueItem, delayAfterCancelMs: number): Promise<void> {
   if (typeof window === 'undefined' || !window.speechSynthesis) {
+    return Promise.resolve()
+  }
+  window.speechSynthesis.cancel()
+  return new Promise((resolve) => {
+    speakAfterCancel(() => {
+      prepareSynthesis()
+      const u = buildUtterance(item.text, 0.9)
+      const done = () => resolve()
+      u.onend = done
+      u.onerror = done
+      try {
+        window.speechSynthesis.speak(u)
+      } catch {
+        done()
+      }
+    }, delayAfterCancelMs)
+  })
+}
+
+async function drainAnnouncementQueue(): Promise<void> {
+  if (typeof window === 'undefined') {
     announcementQueue = []
     announcementProcessing = false
     return
   }
-  if (announcementProcessing || announcementQueue.length === 0) return
 
-  const item = announcementQueue.shift()!
-  announcementProcessing = true
-  window.speechSynthesis.cancel()
+  const canEdge = edgeTtsEnabled()
+  const canNative = typeof window.speechSynthesis !== 'undefined'
 
-  const startSpeak = () => {
-    prepareSynthesis()
-    const u = buildUtterance(item.text, 0.9)
-    const done = () => {
-      announcementProcessing = false
-      drainAnnouncementQueue()
-    }
-    u.onend = done
-    u.onerror = done
-    try {
-      window.speechSynthesis.speak(u)
-    } catch {
-      done()
-    }
+  if (!canEdge && !canNative) {
+    announcementQueue = []
+    announcementProcessing = false
+    return
   }
 
-  if (item.withChime) {
-    primeCallAudioInUserGesture()
-    playCallChime()
-    speakAfterCancel(startSpeak, 160)
-  } else {
-    speakAfterCancel(startSpeak, 48)
+  if (announcementProcessing || announcementQueue.length === 0) return
+
+  announcementProcessing = true
+  const item = announcementQueue.shift()!
+
+  try {
+    let chimePlayed = false
+    if (item.withChime) {
+      primeCallAudioInUserGesture()
+      playCallChime()
+      chimePlayed = true
+      await new Promise<void>((r) => setTimeout(r, 200))
+    }
+
+    if (canEdge) {
+      const ok = await playSpeechViaEdgeTts(item.text)
+      if (ok) return
+    }
+
+    if (!canNative) return
+
+    const delayMs = chimePlayed ? 48 : item.withChime ? 160 : 48
+    await speakNativeItem(item, delayMs)
+  } finally {
+    announcementProcessing = false
+    void drainAnnouncementQueue()
   }
 }
 
 function clearArabicAnnouncementQueue() {
   announcementQueue = []
   announcementProcessing = false
+  stopEdgeTtsPlayback()
   if (typeof window !== 'undefined' && window.speechSynthesis) {
     window.speechSynthesis.cancel()
   }
 }
 
 export function enqueueArabicAnnouncement(text: string, opts?: { withChime?: boolean }) {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return
+  if (typeof window === 'undefined') return
+  if (!edgeTtsEnabled() && !window.speechSynthesis) return
   primeSpeechVoices()
   announcementQueue.push({ text, withChime: opts?.withChime !== false })
-  drainAnnouncementQueue()
+  void drainAnnouncementQueue()
 }
 
-/** `immediate`: للنطق مباشرة بعد النقر (رسالة التفعيل) — بدون setTimeout حتى لا يلغي Chrome صلاحية التشغيل */
 export function speakArabic(
   text: string,
   opts?: {
@@ -179,7 +202,7 @@ export function speakArabic(
     try {
       window.speechSynthesis.speak(u)
     } catch {
-      /* ignore — onerror يلتقط أغلب الحالات */
+      /* ignore */
     }
   }
 
@@ -192,7 +215,6 @@ export function speakArabic(
       }
     }
     go()
-    /** أندرويد/التلفاز: الأصوات تُحمَّل متأخراً — محاولة ثانية نادرة التكرار لكن تقلّل الصمت */
     if (window.speechSynthesis.getVoices().length === 0) {
       window.setTimeout(() => {
         primeSpeechVoices()
@@ -209,7 +231,10 @@ export function stopArabicSpeech() {
   clearArabicAnnouncementQueue()
 }
 
-/** للواجهة: هل يبدو أن المتصفح يدعم التركيب الصوتي (قد تبقى الأصوات فارغة حتى بعد voiceschanged) */
 export function hasSpeechSynthesisAPI(): boolean {
   return typeof window !== 'undefined' && typeof window.speechSynthesis !== 'undefined'
+}
+
+export function canUseDisplayVoice(): boolean {
+  return hasSpeechSynthesisAPI() || edgeTtsEnabled()
 }

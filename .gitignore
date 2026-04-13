@@ -9,6 +9,9 @@ lerna-debug.log*
 
 node_modules
 .env
+
+# Supabase CLI (محلي)
+supabase/.temp/
 .env.*.local
 dist
 dist-ssr

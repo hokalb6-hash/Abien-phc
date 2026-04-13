@@ -8,7 +8,9 @@ import type { Patient, Queue } from '../../types/db'
 import { todayAdenYMD } from '../../utils/adenCalendar'
 import { clinicTypeLabel, formatQueueNumber, queueStatusLabel } from '../../utils/format'
 import { playCallChime, resumeCallAudioContext } from '../../utils/callChime'
+import { edgeTtsEnabled, playSpeechViaEdgeTts } from '../../lib/ttsEdge'
 import {
+  canUseDisplayVoice,
   enqueueArabicAnnouncement,
   hasSpeechSynthesisAPI,
   primeDisplayVoiceInUserGesture,
@@ -179,8 +181,10 @@ export default function QueueDisplay() {
   function enableVoiceAnnouncement() {
     /** أول سطر: تفعيل Chrome/Android — Web Audio + Speech + HTML Audio */
     primeDisplayVoiceInUserGesture()
-    if (!hasSpeechSynthesisAPI()) {
-      toast.error('هذا المتصفح لا يدعم الإعلان الصوتي المحلي. يلزم تشغيل TTS من الخادم لهذا الجهاز.')
+    if (!canUseDisplayVoice()) {
+      toast.error(
+        'لا يتوفر إعلان صوتي بهذا الإعداد. للشاشات الذكية: فعّل VITE_USE_EDGE_TTS=1 وانشر دالة tts-announce المجانية (راجع .env.example).',
+      )
       return
     }
     setVoiceOn(true)
@@ -190,16 +194,28 @@ export default function QueueDisplay() {
       /* ignore */
     }
     void resumeCallAudioContext()
-    /** جرس مسموع يؤكد أن الصوت يعمل حتى لو فشل النطق المحلي */
     playCallChime()
-    speakArabic('تم تفعيل الإعلان الصوتي.', {
-      cancelPrior: false,
-      immediate: true,
-      onError: () =>
+    void (async () => {
+      if (edgeTtsEnabled()) {
+        const ok = await playSpeechViaEdgeTts('تم تفعيل الإعلان الصوتي.')
+        if (ok) return
         toast.error(
-          'تعذّر النطق على هذا الجهاز رغم السماح بالصوت. جرّب تحديث Chrome أو إعلاناً صوتياً من الخادم.',
-        ),
-    })
+          'تعذّر الإعلان من الخادم. تحقق من نشر دالة tts-announce على Supabase ومن إعدادات الشبكة، ثم أعد بناء الموقع.',
+        )
+      }
+      if (hasSpeechSynthesisAPI()) {
+        speakArabic('تم تفعيل الإعلان الصوتي.', {
+          cancelPrior: false,
+          immediate: true,
+          onError: () => {
+            if (edgeTtsEnabled()) return
+            toast.error(
+              'الصفارة تعمل لكن نطق الأسماء محلياً غير مدعوم على هذه الشاشة. فعّل الإعلان من الخادم (VITE_USE_EDGE_TTS=1 ودالة tts-announce المجانية).',
+            )
+          },
+        })
+      }
+    })()
   }
 
   function disableVoiceAnnouncement() {
@@ -232,9 +248,6 @@ export default function QueueDisplay() {
           >
             <Volume2 className="h-10 w-10 text-teal-300" aria-hidden />
             <span className="text-2xl font-black text-white md:text-3xl">اضغط هنا لتفعيل الإعلان الصوتي</span>
-            <span className="text-sm leading-relaxed text-slate-300 md:text-base">
-              يلزم ضغط مرة واحدة فقط على الشاشة أو الريموت حتى يسمح Chrome بتشغيل الصوت ثم يبقى الإعلان مفعلاً.
-            </span>
           </button>
         </div>
       ) : null}
@@ -266,12 +279,6 @@ export default function QueueDisplay() {
               {voiceOn ? <Volume2 className="h-5 w-5 shrink-0" aria-hidden /> : <VolumeX className="h-5 w-5 shrink-0" aria-hidden />}
               {voiceOn ? 'الصوت مفعّل' : 'تفعيل الإعلان الصوتي'}
             </button>
-            <p className="max-w-[280px] text-center text-xs text-slate-500 sm:text-end">
-              Chrome يفرض نقرة حقيقية لتشغيل الصوت (لا يمكن تلقائياً عند فتح الصفحة). اضغط الزر مرة؛ إن سكت الصوت في
-              الإعدادات: أيقونة القفل → أذونات الموقع → الصوت = السماح. عند الاستدعاء: جرس ثم نطق الاسم والدور
-              والعيادة. على بعض أجهزة التلفاز إن بقي الصوت صامتاً فـ Web Speech غير مدعوم — يلزم إعلان صوتي من الخادم
-              (TTS).
-            </p>
           </div>
         </div>
       </header>
