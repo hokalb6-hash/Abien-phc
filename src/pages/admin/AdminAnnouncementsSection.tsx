@@ -140,7 +140,7 @@ export function AdminAnnouncementsSection() {
   }
 
   return (
-    <section>
+    <section className="min-w-0">
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800">
         <Megaphone className="h-6 w-6 text-teal-600" aria-hidden />
         إشعارات المرضى على الموقع

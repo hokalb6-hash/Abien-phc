@@ -354,7 +354,7 @@ export function AdminReportsSection() {
   const columns = filteredSorted[0] ? Object.keys(filteredSorted[0]) : []
 
   return (
-    <section className="space-y-4">
+    <section className="min-w-0 space-y-4">
       <div className="flex flex-col gap-2 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex items-start gap-2">
           <BarChart3 className="mt-1 h-8 w-8 shrink-0 text-teal-600" aria-hidden />
@@ -373,7 +373,7 @@ export function AdminReportsSection() {
           label="نوع التقرير"
           value={kind}
           onChange={(e) => setKind(e.target.value as ReportKind)}
-          className="min-w-[200px] sm:max-w-xs"
+          className="w-full min-w-0 sm:min-w-[200px] sm:max-w-xs"
         >
           <option value="queues">دور العيادات (حسب تاريخ الخدمة)</option>
           <option value="clinic_stats">إحصائيات العيادات — أعداد حسب النوع والحالة (تاريخ الخدمة)</option>

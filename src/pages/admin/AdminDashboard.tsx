@@ -56,14 +56,14 @@ export default function AdminDashboard() {
     'rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-teal-200 hover:shadow-md'
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
+    <div className="mx-auto w-full min-w-0 max-w-6xl space-y-8">
       <div className="flex flex-col gap-2 border-b border-slate-200 pb-6">
         <div className="flex flex-wrap items-center gap-3">
           <LayoutDashboard className="h-9 w-9 text-teal-600" aria-hidden />
           <h1 className="text-2xl font-bold text-slate-900 md:text-3xl">لوحة الإدارة</h1>
           <Badge tone="info">مسؤول النظام</Badge>
         </div>
-        <p className="max-w-2xl text-slate-600">
+        <p className="max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base">
           نظرة سريعة على النظام، إضافة موظفي العيادات والأقسام، إدارة التشخيصات والأدوية، وسجل التدقيق، مع روابط
           سريعة للأقسام.
         </p>
@@ -140,7 +140,7 @@ function QuickLink({
   return (
     <Link
       to={to}
-      className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-teal-300 hover:bg-teal-50/50"
+      className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition touch-manipulation hover:border-teal-300 hover:bg-teal-50/50"
     >
       <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 text-teal-700">
         <Icon className="h-5 w-5" aria-hidden />

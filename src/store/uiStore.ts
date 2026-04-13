@@ -8,7 +8,8 @@ interface UiState {
 }
 
 export const useUiStore = create<UiState>((set) => ({
-  sidebarOpen: true,
+  /** على الهاتف يبدأ مغلقاً حتى لا يضيق عمود المحتوى بجانب القائمة */
+  sidebarOpen: false,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 }))

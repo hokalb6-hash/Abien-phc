@@ -133,7 +133,7 @@ export function AdminStaffSection({ onStaffChanged }: Props) {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="min-w-0 space-y-8">
       <Card title="إضافة موظف جديد">
         <p className="mb-4 text-sm text-slate-600">
           يُنشأ حساب في <strong>Authentication</strong> ثم يُحدَّد الدور في <code className="rounded bg-slate-100 px-1">profiles</code>.
@@ -181,7 +181,7 @@ export function AdminStaffSection({ onStaffChanged }: Props) {
               </option>
             ))}
           </Select>
-          <Button type="submit" disabled={creating} className="w-fit gap-2">
+          <Button type="submit" disabled={creating} className="w-full min-h-11 touch-manipulation gap-2 sm:w-fit sm:min-h-0">
             <UserPlus className="h-4 w-4" />
             {creating ? 'جاري الإنشاء…' : 'إنشاء حساب الموظف'}
           </Button>

@@ -10,7 +10,7 @@ import { Button } from './ui/Button'
 
 export function Layout() {
   const { profile, signOut, loading } = useAuthStore()
-  const { sidebarOpen, toggleSidebar } = useUiStore()
+  const { sidebarOpen, toggleSidebar, setSidebarOpen } = useUiStore()
 
   async function handleSignOut() {
     try {
@@ -23,9 +23,24 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <div className={sidebarOpen ? 'block' : 'hidden md:block'}>
-        <Sidebar />
+      {sidebarOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-slate-900/50 md:hidden"
+          aria-label="إغلاق القائمة"
+          onClick={() => setSidebarOpen(false)}
+        />
+      ) : null}
+
+      {/* على الشاشات الصغيرة: قائمة منزلقة فوق المحتوى وليس عموداً يضيق الصفحة */}
+      <div
+        className={`fixed inset-y-0 right-0 z-50 h-full w-60 max-w-[min(100vw,16rem)] transition-transform duration-200 ease-out md:static md:z-auto md:max-w-none md:translate-x-0 md:shadow-none ${
+          sidebarOpen ? 'translate-x-0 shadow-xl' : 'translate-x-full pointer-events-none md:pointer-events-auto'
+        } md:translate-x-0`}
+      >
+        <Sidebar onNavigate={() => setSidebarOpen(false)} />
       </div>
+
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4">
           <div className="flex min-w-0 items-center gap-2">
@@ -57,7 +72,7 @@ export function Layout() {
             خروج
           </Button>
         </header>
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        <main className="min-w-0 flex-1 overflow-x-auto overflow-y-auto p-4 md:p-6">
           <Outlet />
         </main>
         <footer className="shrink-0 border-t border-slate-200 bg-white px-4 py-2.5 text-center text-[11px] text-slate-500">

@@ -28,7 +28,7 @@ function linkClass(active: boolean) {
   }`
 }
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const role = useAuthStore((s) => s.role)
   const visible = items.filter((i) => role && i.roles.includes(role))
 
@@ -40,7 +40,13 @@ export function Sidebar() {
       </div>
       <nav className="flex flex-col gap-1 p-3">
         {visible.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} className={({ isActive }) => linkClass(isActive)} end={to === '/admin'}>
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) => linkClass(isActive)}
+            end={to === '/admin'}
+            onClick={() => onNavigate?.()}
+          >
             <Icon className="h-5 w-5 shrink-0" aria-hidden />
             {label}
           </NavLink>

@@ -114,14 +114,14 @@ export default function PharmacyWorkspace() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 sm:space-y-6">
+    <div className="mx-auto w-full min-w-0 max-w-6xl space-y-5 sm:space-y-6">
       <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
         <div className="min-w-0">
           <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold text-slate-900 sm:text-2xl">
             <Pill className="h-7 w-7 shrink-0 text-teal-600 sm:h-8 sm:w-8" />
             الصيدلية
           </h1>
-          <p className="mt-1 hidden text-slate-600 sm:block sm:max-w-2xl sm:text-[15px]">
+          <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-[15px]">
             وصفات اليوم مجمّعة حسب زيارة المريض — عرض واضح للجرعات وجاهزية الصرف
           </p>
         </div>

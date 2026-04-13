@@ -15,7 +15,7 @@ export function AdminReferenceData() {
   const [tab, setTab] = useState<Tab>('diagnoses')
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
         <TabBtn active={tab === 'diagnoses'} onClick={() => setTab('diagnoses')} icon={BookMarked} label="التشخيصات" />
         <TabBtn active={tab === 'medications'} onClick={() => setTab('medications')} icon={Pill} label="الأدوية" />
