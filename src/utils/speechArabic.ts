@@ -67,6 +67,15 @@ function pickArabicVoice(): SpeechSynthesisVoice | null {
   )
 }
 
+/** إن لم يوجد صوت عربي (شائع على التلفاز) نستخدم أي صوت متاح حتى لا يبقى النطق صامتاً */
+function pickVoiceForUtterance(): SpeechSynthesisVoice | null {
+  const ar = pickArabicVoice()
+  if (ar) return ar
+  if (typeof window === 'undefined' || !window.speechSynthesis) return null
+  const list = window.speechSynthesis.getVoices()
+  return list[0] ?? null
+}
+
 function prepareSynthesis(): void {
   if (typeof window === 'undefined' || !window.speechSynthesis) return
   try {
@@ -82,7 +91,7 @@ function buildUtterance(text: string, rate: number): SpeechSynthesisUtterance {
   u.rate = rate
   u.volume = 1
   u.pitch = 1
-  const voice = pickArabicVoice()
+  const voice = pickVoiceForUtterance()
   if (voice) u.voice = voice
   return u
 }
@@ -147,7 +156,12 @@ export function enqueueArabicAnnouncement(text: string, opts?: { withChime?: boo
 /** `immediate`: للنطق مباشرة بعد النقر (رسالة التفعيل) — بدون setTimeout حتى لا يلغي Chrome صلاحية التشغيل */
 export function speakArabic(
   text: string,
-  opts?: { rate?: number; cancelPrior?: boolean; immediate?: boolean },
+  opts?: {
+    rate?: number
+    cancelPrior?: boolean
+    immediate?: boolean
+    onError?: (ev: SpeechSynthesisErrorEvent) => void
+  },
 ) {
   if (typeof window === 'undefined' || !window.speechSynthesis) return
   primeSpeechVoices()
@@ -159,19 +173,31 @@ export function speakArabic(
   const run = () => {
     prepareSynthesis()
     const u = buildUtterance(text, opts?.rate ?? 0.9)
+    u.onerror = (ev) => {
+      opts?.onError?.(ev)
+    }
     try {
       window.speechSynthesis.speak(u)
     } catch {
-      /* ignore */
+      /* ignore — onerror يلتقط أغلب الحالات */
     }
   }
 
   if (opts?.immediate) {
-    /** بعد cancel() يحتاج WebKit «نبضة» تالية؛ microtask يبقى قريباً من تفعيل المستخدم */
-    if (opts.cancelPrior !== false) {
-      queueMicrotask(run)
-    } else {
-      run()
+    const go = () => {
+      if (opts?.cancelPrior !== false) {
+        queueMicrotask(run)
+      } else {
+        run()
+      }
+    }
+    go()
+    /** أندرويد/التلفاز: الأصوات تُحمَّل متأخراً — محاولة ثانية نادرة التكرار لكن تقلّل الصمت */
+    if (window.speechSynthesis.getVoices().length === 0) {
+      window.setTimeout(() => {
+        primeSpeechVoices()
+        go()
+      }, 500)
     }
     return
   }

@@ -7,7 +7,7 @@ import { CLINIC_TYPES } from '../../constants/clinics'
 import type { Patient, Queue } from '../../types/db'
 import { todayAdenYMD } from '../../utils/adenCalendar'
 import { clinicTypeLabel, formatQueueNumber, queueStatusLabel } from '../../utils/format'
-import { resumeCallAudioContext } from '../../utils/callChime'
+import { playCallChime, resumeCallAudioContext } from '../../utils/callChime'
 import {
   enqueueArabicAnnouncement,
   hasSpeechSynthesisAPI,
@@ -190,7 +190,16 @@ export default function QueueDisplay() {
       /* ignore */
     }
     void resumeCallAudioContext()
-    speakArabic('تم تفعيل الإعلان الصوتي.', { cancelPrior: true, immediate: true })
+    /** جرس مسموع يؤكد أن الصوت يعمل حتى لو فشل النطق المحلي */
+    playCallChime()
+    speakArabic('تم تفعيل الإعلان الصوتي.', {
+      cancelPrior: false,
+      immediate: true,
+      onError: () =>
+        toast.error(
+          'تعذّر النطق على هذا الجهاز رغم السماح بالصوت. جرّب تحديث Chrome أو إعلاناً صوتياً من الخادم.',
+        ),
+    })
   }
 
   function disableVoiceAnnouncement() {
