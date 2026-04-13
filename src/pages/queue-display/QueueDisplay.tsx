@@ -7,10 +7,11 @@ import { CLINIC_TYPES } from '../../constants/clinics'
 import type { Patient, Queue } from '../../types/db'
 import { todayAdenYMD } from '../../utils/adenCalendar'
 import { clinicTypeLabel, formatQueueNumber, queueStatusLabel } from '../../utils/format'
-import { primeCallAudioInUserGesture, resumeCallAudioContext } from '../../utils/callChime'
+import { resumeCallAudioContext } from '../../utils/callChime'
 import {
   enqueueArabicAnnouncement,
   hasSpeechSynthesisAPI,
+  primeDisplayVoiceInUserGesture,
   speakArabic,
   stopArabicSpeech,
 } from '../../utils/speechArabic'
@@ -175,30 +176,59 @@ export default function QueueDisplay() {
     }
   }, [rows, voiceOn])
 
-  function toggleVoice() {
-    /** يجب أن يحدث في نفس لحظة النقر — بدونه يُرفض الصوت على أندرويد وكثير من الشاشات الذكية */
-    primeCallAudioInUserGesture()
-    const next = !voiceOn
-    if (next && !hasSpeechSynthesisAPI()) {
-      toast.error('هذا المتصفح لا يدعم الإعلان الصوتي. جرّب Chrome أو Edge على الشاشة أو الهاتف.')
+  function enableVoiceAnnouncement() {
+    /** أول سطر: تفعيل Chrome/Android — Web Audio + Speech + HTML Audio */
+    primeDisplayVoiceInUserGesture()
+    if (!hasSpeechSynthesisAPI()) {
+      toast.error('هذا المتصفح لا يدعم الإعلان الصوتي المحلي. يلزم تشغيل TTS من الخادم لهذا الجهاز.')
       return
     }
-    setVoiceOn(next)
+    setVoiceOn(true)
     try {
-      localStorage.setItem('abien_display_voice', next ? '1' : '0')
+      localStorage.setItem('abien_display_voice', '1')
     } catch {
       /* ignore */
     }
-    if (next) {
-      void resumeCallAudioContext()
-      speakArabic('تم تفعيل الإعلان الصوتي.', { cancelPrior: true })
-    } else {
-      stopArabicSpeech()
+    void resumeCallAudioContext()
+    speakArabic('تم تفعيل الإعلان الصوتي.', { cancelPrior: true, immediate: true })
+  }
+
+  function disableVoiceAnnouncement() {
+    setVoiceOn(false)
+    try {
+      localStorage.setItem('abien_display_voice', '0')
+    } catch {
+      /* ignore */
     }
+    stopArabicSpeech()
+  }
+
+  function toggleVoice() {
+    if (voiceOn) {
+      disableVoiceAnnouncement()
+      return
+    }
+    enableVoiceAnnouncement()
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 px-4 py-6 text-white md:px-8 md:py-10">
+    <div dir="rtl" className="relative min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 px-4 py-6 text-white md:px-8 md:py-10">
+      {!voiceOn ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 px-4 backdrop-blur-sm">
+          <button
+            type="button"
+            onPointerDown={() => primeDisplayVoiceInUserGesture()}
+            onClick={() => enableVoiceAnnouncement()}
+            className="flex min-h-[120px] w-full max-w-xl touch-manipulation flex-col items-center justify-center gap-3 rounded-3xl border-2 border-teal-500 bg-slate-900/95 px-6 py-8 text-center shadow-2xl shadow-teal-950/40"
+          >
+            <Volume2 className="h-10 w-10 text-teal-300" aria-hidden />
+            <span className="text-2xl font-black text-white md:text-3xl">اضغط هنا لتفعيل الإعلان الصوتي</span>
+            <span className="text-sm leading-relaxed text-slate-300 md:text-base">
+              يلزم ضغط مرة واحدة فقط على الشاشة أو الريموت حتى يسمح Chrome بتشغيل الصوت ثم يبقى الإعلان مفعلاً.
+            </span>
+          </button>
+        </div>
+      ) : null}
       <header className="mx-auto mb-8 max-w-7xl border-b border-slate-700/80 pb-6">
         <div className="flex flex-col items-center justify-between gap-4 sm:flex-row sm:items-start">
           <div className="text-center sm:text-start">
@@ -216,8 +246,9 @@ export default function QueueDisplay() {
             </p>
             <button
               type="button"
+              onPointerDown={() => primeDisplayVoiceInUserGesture()}
               onClick={() => toggleVoice()}
-              className={`flex items-center gap-2 rounded-xl border-2 px-4 py-3 text-sm font-semibold transition md:text-base ${
+              className={`flex min-h-[48px] min-w-[48px] touch-manipulation items-center gap-2 rounded-xl border-2 px-4 py-3 text-sm font-semibold transition md:text-base ${
                 voiceOn
                   ? 'border-teal-500 bg-teal-950/50 text-teal-300'
                   : 'border-slate-600 bg-slate-800/80 text-slate-200 hover:border-slate-500'
@@ -226,9 +257,11 @@ export default function QueueDisplay() {
               {voiceOn ? <Volume2 className="h-5 w-5 shrink-0" aria-hidden /> : <VolumeX className="h-5 w-5 shrink-0" aria-hidden />}
               {voiceOn ? 'الصوت مفعّل' : 'تفعيل الإعلان الصوتي'}
             </button>
-            <p className="max-w-[240px] text-center text-xs text-slate-500 sm:text-end">
-              اضغط هنا مرة واحدة لتفعيل الصوت (مطلوب من المتصفح). يُفضّل Chrome؛ ارفع مستوى الصوت وتأكد أن الموقع مسموح
-              بالصوت. عند الاستدعاء: جرس قصير ثم نطق الاسم ورقم الدور والعيادة.
+            <p className="max-w-[280px] text-center text-xs text-slate-500 sm:text-end">
+              Chrome يفرض نقرة حقيقية لتشغيل الصوت (لا يمكن تلقائياً عند فتح الصفحة). اضغط الزر مرة؛ إن سكت الصوت في
+              الإعدادات: أيقونة القفل → أذونات الموقع → الصوت = السماح. عند الاستدعاء: جرس ثم نطق الاسم والدور
+              والعيادة. على بعض أجهزة التلفاز إن بقي الصوت صامتاً فـ Web Speech غير مدعوم — يلزم إعلان صوتي من الخادم
+              (TTS).
             </p>
           </div>
         </div>

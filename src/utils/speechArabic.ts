@@ -1,9 +1,36 @@
 /**
  * إعلان صوتي بالعربية (Web Speech API).
- * على أندرويد/لوحات ذكية/WebView: يُفضّل استدعاء primeCallAudioInUserGesture() متزامناً مع النقر،
- * وتأخير قصير بعد speechSynthesis.cancel() (WebKit)، واختيار صوت عربي صريح إن وُجد.
+ * Chrome/Android: يجب تشغيل الصوت داخل نفس لحظة تفاعل المستخدم؛ التأخير بـ setTimeout قد يلغي التفعيل.
+ * استخدم primeDisplayVoiceInUserGesture() في أول سطر من onPointerDown/onClick، ورسالة التفعيل بـ immediate: true.
  */
 import { playCallChime, primeCallAudioInUserGesture } from './callChime'
+
+const SILENT_WAV =
+  'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA='
+
+/**
+ * يُستدعى متزامناً مع لمس/نقر المستخدم (قبل أي await أو setState).
+ * يفتح Web Audio + يستأنف speechSynthesis + يجرّب تشغيلاً صامتاً لفتح قناة HTML Audio (Chrome على الهاتف والتلفاز).
+ */
+export function primeDisplayVoiceInUserGesture(): void {
+  primeCallAudioInUserGesture()
+  if (typeof window === 'undefined') return
+  try {
+    if (window.speechSynthesis) {
+      window.speechSynthesis.getVoices()
+      window.speechSynthesis.resume()
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const a = new Audio()
+    a.src = SILENT_WAV
+    void a.play().catch(() => {})
+  } catch {
+    /* ignore */
+  }
+}
 
 type QueueItem = { text: string; withChime: boolean }
 
@@ -117,14 +144,19 @@ export function enqueueArabicAnnouncement(text: string, opts?: { withChime?: boo
   drainAnnouncementQueue()
 }
 
-export function speakArabic(text: string, opts?: { rate?: number; cancelPrior?: boolean }) {
+/** `immediate`: للنطق مباشرة بعد النقر (رسالة التفعيل) — بدون setTimeout حتى لا يلغي Chrome صلاحية التشغيل */
+export function speakArabic(
+  text: string,
+  opts?: { rate?: number; cancelPrior?: boolean; immediate?: boolean },
+) {
   if (typeof window === 'undefined' || !window.speechSynthesis) return
   primeSpeechVoices()
   if (opts?.cancelPrior !== false) {
     clearArabicAnnouncementQueue()
     window.speechSynthesis.cancel()
   }
-  speakAfterCancel(() => {
+
+  const run = () => {
     prepareSynthesis()
     const u = buildUtterance(text, opts?.rate ?? 0.9)
     try {
@@ -132,7 +164,19 @@ export function speakArabic(text: string, opts?: { rate?: number; cancelPrior?: 
     } catch {
       /* ignore */
     }
-  }, 48)
+  }
+
+  if (opts?.immediate) {
+    /** بعد cancel() يحتاج WebKit «نبضة» تالية؛ microtask يبقى قريباً من تفعيل المستخدم */
+    if (opts.cancelPrior !== false) {
+      queueMicrotask(run)
+    } else {
+      run()
+    }
+    return
+  }
+
+  speakAfterCancel(run, 48)
 }
 
 export function stopArabicSpeech() {
