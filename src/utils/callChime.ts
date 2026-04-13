@@ -18,10 +18,22 @@ export async function resumeCallAudioContext(): Promise<void> {
   if (ctx.state === 'suspended') await ctx.resume()
 }
 
+/**
+ * يُستدعى **متزامناً** داخل onClick (قبل أي await/setState) — مطلوب على Chrome/Android ولوحات الذكية
+ * حتى يُعتبر استئناف Web Audio ضمن «تفاعل المستخدم» ولا يُرفض.
+ */
+export function primeCallAudioInUserGesture(): void {
+  const ctx = getCtx()
+  if (!ctx) return
+  if (ctx.state === 'suspended') void ctx.resume()
+}
+
 export function playCallChime(): void {
   try {
     const ctx = getCtx()
-    if (!ctx || ctx.state !== 'running') return
+    if (!ctx) return
+    if (ctx.state === 'suspended') void ctx.resume()
+    if (ctx.state !== 'running') return
 
     const t0 = ctx.currentTime
     const osc = ctx.createOscillator()

@@ -7,8 +7,13 @@ import { CLINIC_TYPES } from '../../constants/clinics'
 import type { Patient, Queue } from '../../types/db'
 import { todayAdenYMD } from '../../utils/adenCalendar'
 import { clinicTypeLabel, formatQueueNumber, queueStatusLabel } from '../../utils/format'
-import { resumeCallAudioContext } from '../../utils/callChime'
-import { enqueueArabicAnnouncement, speakArabic, stopArabicSpeech } from '../../utils/speechArabic'
+import { primeCallAudioInUserGesture, resumeCallAudioContext } from '../../utils/callChime'
+import {
+  enqueueArabicAnnouncement,
+  hasSpeechSynthesisAPI,
+  speakArabic,
+  stopArabicSpeech,
+} from '../../utils/speechArabic'
 
 type DisplayQueue = Queue & {
   patients: Pick<Patient, 'full_name'> | null
@@ -171,7 +176,13 @@ export default function QueueDisplay() {
   }, [rows, voiceOn])
 
   function toggleVoice() {
+    /** يجب أن يحدث في نفس لحظة النقر — بدونه يُرفض الصوت على أندرويد وكثير من الشاشات الذكية */
+    primeCallAudioInUserGesture()
     const next = !voiceOn
+    if (next && !hasSpeechSynthesisAPI()) {
+      toast.error('هذا المتصفح لا يدعم الإعلان الصوتي. جرّب Chrome أو Edge على الشاشة أو الهاتف.')
+      return
+    }
     setVoiceOn(next)
     try {
       localStorage.setItem('abien_display_voice', next ? '1' : '0')
@@ -179,9 +190,8 @@ export default function QueueDisplay() {
       /* ignore */
     }
     if (next) {
-      void resumeCallAudioContext().then(() => {
-        speakArabic('تم تفعيل الإعلان الصوتي.', { cancelPrior: true })
-      })
+      void resumeCallAudioContext()
+      speakArabic('تم تفعيل الإعلان الصوتي.', { cancelPrior: true })
     } else {
       stopArabicSpeech()
     }
@@ -216,9 +226,9 @@ export default function QueueDisplay() {
               {voiceOn ? <Volume2 className="h-5 w-5 shrink-0" aria-hidden /> : <VolumeX className="h-5 w-5 shrink-0" aria-hidden />}
               {voiceOn ? 'الصوت مفعّل' : 'تفعيل الإعلان الصوتي'}
             </button>
-            <p className="max-w-[220px] text-center text-xs text-slate-500 sm:text-end">
-              اضغط للتفعيل عند أول استخدام (للسماح بالصوت في المتصفح)؛ عند الاستدعاء يُشغَّل جرس قصير ثم يُعلَن الاسم
-              ورقم الدور والعيادة.
+            <p className="max-w-[240px] text-center text-xs text-slate-500 sm:text-end">
+              اضغط هنا مرة واحدة لتفعيل الصوت (مطلوب من المتصفح). يُفضّل Chrome؛ ارفع مستوى الصوت وتأكد أن الموقع مسموح
+              بالصوت. عند الاستدعاء: جرس قصير ثم نطق الاسم ورقم الدور والعيادة.
             </p>
           </div>
         </div>
