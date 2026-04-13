@@ -62,22 +62,68 @@ function playMp3FromBase64(base64: string): Promise<void> {
   })
 }
 
-export async function playSpeechViaEdgeTts(text: string): Promise<boolean> {
-  if (!edgeTtsEnabled()) return false
+export type EdgeTtsPlayResult =
+  | { ok: true }
+  | { ok: false; message: string }
+
+function formatInvokeFailure(error: unknown, data: unknown): string {
+  if (error != null && typeof error === 'object') {
+    const e = error as Record<string, unknown>
+    const msg = typeof e.message === 'string' ? e.message.trim() : ''
+    const ctx = e.context as Record<string, unknown> | undefined
+    const body = ctx && typeof ctx.body === 'string' ? ctx.body : ''
+    if (body) {
+      try {
+        const j = JSON.parse(body) as { error?: unknown }
+        if (j.error != null && String(j.error).trim()) {
+          return String(j.error).trim()
+        }
+      } catch {
+        if (body.length < 200) return body
+      }
+    }
+    if (msg) return msg
+  }
+  if (data && typeof data === 'object' && data !== null && 'error' in data) {
+    const errVal = (data as { error: unknown }).error
+    if (errVal != null && String(errVal).trim()) return String(errVal).trim()
+  }
+  return 'فشل الاستجابة من الدالة (لا تفاصيل).'
+}
+
+export async function playSpeechViaEdgeTts(text: string): Promise<EdgeTtsPlayResult> {
+  if (!edgeTtsEnabled()) {
+    return { ok: false, message: 'مسار Edge TTS غير مفعّل (VITE_USE_EDGE_TTS=1) أو Supabase غير مضبوط.' }
+  }
   const trimmed = text.trim()
-  if (!trimmed) return false
+  if (!trimmed) return { ok: false, message: 'نص فارغ.' }
   try {
     const { data, error } = await supabase.functions.invoke('tts-announce', {
       body: { text: trimmed.slice(0, 500) },
     })
-    if (error) return false
-    if (!data || typeof data !== 'object') return false
+    if (error) {
+      const message = formatInvokeFailure(error, data)
+      console.warn('[tts-announce]', error, data)
+      return { ok: false, message }
+    }
+    if (!data || typeof data !== 'object') {
+      return { ok: false, message: 'استجابة فارغة من الدالة — تحقق من النشر والاسم tts-announce.' }
+    }
     const b64 =
       'audioBase64' in data ? String((data as { audioBase64: unknown }).audioBase64) : ''
-    if (!b64) return false
-    await playMp3FromBase64(b64)
-    return true
-  } catch {
-    return false
+    if (!b64) {
+      return { ok: false, message: 'لا يوجد audioBase64 في الاستجابة — راجع سجلات الدالة في Supabase.' }
+    }
+    try {
+      await playMp3FromBase64(b64)
+    } catch (playErr) {
+      const m = playErr instanceof Error ? playErr.message : String(playErr)
+      return { ok: false, message: `تعذّر تشغيل الصوت في المتصفح: ${m}` }
+    }
+    return { ok: true }
+  } catch (e) {
+    const m = e instanceof Error ? e.message : String(e)
+    console.warn('[tts-announce]', e)
+    return { ok: false, message: m || 'خطأ شبكة أو CORS.' }
   }
 }

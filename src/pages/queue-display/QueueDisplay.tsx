@@ -197,11 +197,9 @@ export default function QueueDisplay() {
     playCallChime()
     void (async () => {
       if (edgeTtsEnabled()) {
-        const ok = await playSpeechViaEdgeTts('تم تفعيل الإعلان الصوتي.')
-        if (ok) return
-        toast.error(
-          'تعذّر الإعلان من الخادم. تحقق من نشر دالة tts-announce على Supabase ومن إعدادات الشبكة، ثم أعد بناء الموقع.',
-        )
+        const tts = await playSpeechViaEdgeTts('تم تفعيل الإعلان الصوتي.')
+        if (tts.ok) return
+        toast.error(`تعذّر الإعلان من الخادم: ${tts.message}`)
       }
       if (hasSpeechSynthesisAPI()) {
         speakArabic('تم تفعيل الإعلان الصوتي.', {

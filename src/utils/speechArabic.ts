@@ -146,8 +146,9 @@ async function drainAnnouncementQueue(): Promise<void> {
     }
 
     if (canEdge) {
-      const ok = await playSpeechViaEdgeTts(item.text)
-      if (ok) return
+      const tts = await playSpeechViaEdgeTts(item.text)
+      if (tts.ok) return
+      console.warn('[tts-announce]', tts.message)
     }
 
     if (!canNative) return
