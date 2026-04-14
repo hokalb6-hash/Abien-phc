@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'react-hot-toast'
 import { Volume2, VolumeX } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -22,6 +22,8 @@ type DisplayQueue = Queue & {
 }
 
 const ACTIVE: Queue['status'][] = ['waiting', 'called', 'in_service']
+/** يُجلب من الخادم لاكتشاف الانتقال إلى «لم يحضر» وإعلان صوتي، دون عرض البطاقة */
+const FETCH_STATUSES: Queue['status'][] = [...ACTIVE, 'no_show']
 
 /** أقصى عدد يُعرض لكل عيادة؛ عند اختفاء أحد المستفيدين يظهر التالي في الترتيب */
 const DISPLAY_LIMIT_PER_CLINIC = 5
@@ -51,6 +53,12 @@ function buildCallAnnouncement(q: DisplayQueue): string {
   return `نرجو من ${name}، صاحب رقم الدور ${num}، التوجّه إلى ${clinic}.`
 }
 
+function buildNoShowAnnouncement(q: DisplayQueue): string {
+  const num = formatQueueNumber(q.queue_number)
+  const clinic = clinicTypeLabel(q.clinic_type)
+  return `تنبيه: صاحب رقم الدور ${num} في ${clinic} — المريض غير حاضر حالياً وسيُخفى من الشاشة.`
+}
+
 /**
  * شاشة تلفاز: أدوار اليوم؛ حتى 5 مستفيدين لكل عيادة (يظهر التالي عند انتهاء/اختفاء أحدهم)، وإعلان صوتي عند الاستدعاء.
  */
@@ -68,6 +76,7 @@ export default function QueueDisplay() {
   const prevStatusRef = useRef<Map<string, Queue['status']>>(new Map())
   const lastVoiceOnRef = useRef(false)
   const [clock, setClock] = useState(() => new Date())
+  const displayRows = useMemo(() => rows.filter((q) => ACTIVE.includes(q.status)), [rows])
   /** عند فشل WebSocket نستطلع أسرع (5 ث) حتى يقترب من «لحظي» قدر الإمكان */
   const [realtimeDegraded, setRealtimeDegraded] = useState(false)
 
@@ -76,7 +85,7 @@ export default function QueueDisplay() {
       .from('queues')
       .select('*, patients (full_name)')
       .eq('service_date', todayAdenYMD())
-      .in('status', ACTIVE)
+      .in('status', FETCH_STATUSES)
       .order('queue_number', { ascending: true })
 
     if (qError) {
@@ -170,6 +179,14 @@ export default function QueueDisplay() {
       map.set(q.id, q.status)
       if (q.status === 'called' && was !== undefined && was !== 'called') {
         enqueueArabicAnnouncement(buildCallAnnouncement(q), { withChime: true })
+      }
+      if (
+        q.status === 'no_show' &&
+        was !== undefined &&
+        was !== 'no_show' &&
+        ACTIVE.includes(was)
+      ) {
+        enqueueArabicAnnouncement(buildNoShowAnnouncement(q), { withChime: true })
       }
     }
     for (const id of [...map.keys()]) {
@@ -276,13 +293,13 @@ export default function QueueDisplay() {
         </div>
       ) : error ? (
         <p className="text-center text-2xl text-red-400">{error}</p>
-      ) : rows.length === 0 ? (
+      ) : displayRows.length === 0 ? (
         <p className="text-center text-2xl text-slate-400">لا يوجد مراجعون في الانتظار حالياً لهذا اليوم</p>
       ) : (
         <div className="mx-auto flex max-w-7xl flex-col gap-8">
           <div className="grid gap-6 lg:grid-cols-3">
             {CLINIC_TYPES.map((clinicType) => {
-              const slice = topQueuesForClinic(rows, clinicType)
+              const slice = topQueuesForClinic(displayRows, clinicType)
               return (
                 <section
                   key={clinicType}

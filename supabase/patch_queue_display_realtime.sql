@@ -11,7 +11,7 @@ create policy "anon_select_queues_display"
   to anon
   using (
     service_date = (timezone('Asia/Aden', now()))::date
-    and status in ('waiting', 'called', 'in_service')
+    and status in ('waiting', 'called', 'in_service', 'no_show')
   );
 
 drop policy if exists "anon_select_patients_display_queue" on public.patients;
@@ -23,7 +23,7 @@ create policy "anon_select_patients_display_queue"
       select 1 from public.queues q
       where q.patient_id = patients.id
         and q.service_date = (timezone('Asia/Aden', now()))::date
-        and q.status in ('waiting', 'called', 'in_service')
+        and q.status in ('waiting', 'called', 'in_service', 'no_show')
     )
   );
 

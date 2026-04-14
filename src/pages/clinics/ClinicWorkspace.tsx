@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'react-hot-toast'
-import { FlaskConical, List, RefreshCw, Siren, Stethoscope, User, UserPlus, X } from 'lucide-react'
+import { FlaskConical, List, RefreshCw, Siren, Stethoscope, User } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { CLINIC_LABELS, CLINIC_TYPES, type ClinicTypeValue } from '../../constants/clinics'
 import { LAB_TEST_CATALOG, labelsFromLabTestIds, parseRequestedLabTests } from '../../constants/labTests'
@@ -30,22 +30,16 @@ export type QueueWithRelations = Queue & {
 
 type RxWithMed = Prescription & { medications: Medication | null }
 
+function referralClosed(st: Referral['status']) {
+  return st === 'completed' || st === 'no_show'
+}
+
 export default function ClinicWorkspace() {
   const [rows, setRows] = useState<QueueWithRelations[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [clinicFilter, setClinicFilter] = useState<ClinicTypeValue | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<Queue['status'] | 'all'>('all')
-  const [walkIn, setWalkIn] = useState({
-    full_name: '',
-    phone: '',
-    national_id: '',
-    date_of_birth: '',
-    gender: '',
-    clinic_type: '' as ClinicTypeValue | '',
-  })
-  const [walkInSaving, setWalkInSaving] = useState(false)
-  const [walkInDrawerOpen, setWalkInDrawerOpen] = useState(false)
 
   const loadQueues = useCallback(async () => {
     setLoading(true)
@@ -124,85 +118,6 @@ export default function ClinicWorkspace() {
     }
   }, [rows, selectedId])
 
-  useEffect(() => {
-    if (!walkInDrawerOpen) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setWalkInDrawerOpen(false)
-    }
-    window.addEventListener('keydown', onKey)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prevOverflow
-    }
-  }, [walkInDrawerOpen])
-
-  async function registerWalkInAtClinic(e: FormEvent) {
-    e.preventDefault()
-    const name = walkIn.full_name.trim()
-    if (!name) {
-      toast.error('أدخل الاسم الكامل للمراجع')
-      return
-    }
-    if (!walkIn.clinic_type) {
-      toast.error('اختر العيادة التي يُسجَّل لها الدور')
-      return
-    }
-    const clinicChosen = walkIn.clinic_type
-    setWalkInSaving(true)
-    try {
-      const { data: patient, error: errPatient } = await supabase
-        .from('patients')
-        .insert({
-          full_name: name,
-          phone: walkIn.phone.trim() || null,
-          national_id: walkIn.national_id.trim() || null,
-          date_of_birth: walkIn.date_of_birth || null,
-          gender: walkIn.gender || null,
-        })
-        .select('id')
-        .single()
-
-      if (errPatient || !patient) {
-        toast.error(errPatient?.message ?? 'تعذر حفظ بيانات المراجع')
-        return
-      }
-
-      const { data: queue, error: errQueue } = await supabase
-        .from('queues')
-        .insert({
-          patient_id: patient.id,
-          clinic_type: clinicChosen,
-          status: 'waiting',
-        })
-        .select('id, queue_number')
-        .single()
-
-      if (errQueue || !queue) {
-        toast.error(errQueue?.message ?? 'تعذر إنشاء دور للعيادة')
-        return
-      }
-
-      toast.success(`تم التسجيل — رقم الدور ${queue.queue_number} (${CLINIC_LABELS[clinicChosen]})`)
-      setWalkIn({
-        full_name: '',
-        phone: '',
-        national_id: '',
-        date_of_birth: '',
-        gender: '',
-        clinic_type: '',
-      })
-      setClinicFilter(clinicChosen)
-      setStatusFilter('all')
-      await loadQueues()
-      setSelectedId(queue.id)
-      setWalkInDrawerOpen(false)
-    } finally {
-      setWalkInSaving(false)
-    }
-  }
-
   return (
     <div className="mx-auto max-w-7xl space-y-5 sm:space-y-6">
       <header className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
@@ -216,15 +131,6 @@ export default function ClinicWorkspace() {
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => setWalkInDrawerOpen(true)}
-            className="min-h-11 w-full touch-manipulation gap-2 sm:w-auto sm:min-h-0 sm:self-start"
-          >
-            <UserPlus className="h-4 w-4" />
-            تسجيل مراجع بدون حجز مسبق
-          </Button>
           <Button
             type="button"
             variant="secondary"
@@ -262,124 +168,8 @@ export default function ClinicWorkspace() {
           <option value="called">تم الاستدعاء</option>
           <option value="in_service">قيد الكشف</option>
           <option value="completed">مكتمل</option>
+          <option value="no_show">لم يحضر (مخفي من شاشة الدور)</option>
         </Select>
-      </div>
-
-      {/* درج جانبي: تسجيل مراجع بدون حجز مسبق */}
-      <div
-        className={`fixed inset-0 z-[100] transition-[visibility] duration-300 ${walkInDrawerOpen ? 'visible' : 'invisible pointer-events-none'}`}
-        aria-hidden={!walkInDrawerOpen}
-      >
-        <button
-          type="button"
-          className={`absolute inset-0 bg-slate-900/50 transition-opacity duration-300 ${walkInDrawerOpen ? 'opacity-100' : 'opacity-0'}`}
-          aria-label="إغلاق اللوحة"
-          onClick={() => setWalkInDrawerOpen(false)}
-        />
-        <aside
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="walk-in-drawer-title"
-          className={`absolute top-0 bottom-0 z-[101] flex w-full max-w-md flex-col border-s border-slate-200 bg-white shadow-2xl transition-transform duration-300 ease-out ltr:right-0 rtl:left-0 ${
-            walkInDrawerOpen ? 'translate-x-0' : 'ltr:translate-x-full rtl:-translate-x-full'
-          }`}
-        >
-          <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-teal-950/[0.04] px-4 py-4">
-            <div className="min-w-0">
-              <h2 id="walk-in-drawer-title" className="text-lg font-bold text-slate-900">
-                مراجع بدون حجز مسبق
-              </h2>
-              <p className="mt-1 text-sm text-slate-600">
-                تسجيل عند الحضور وإصدار رقم دور اليوم للعيادة المختارة.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              className="shrink-0 px-2"
-              aria-label="إغلاق"
-              onClick={() => setWalkInDrawerOpen(false)}
-            >
-              <X className="h-5 w-5" />
-            </Button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4">
-            <form onSubmit={(ev) => void registerWalkInAtClinic(ev)} className="grid gap-3">
-              <Select
-                label="العيادة المطلوبة"
-                value={walkIn.clinic_type}
-                onChange={(e) =>
-                  setWalkIn((w) => ({ ...w, clinic_type: e.target.value as ClinicTypeValue | '' }))
-                }
-                required
-              >
-                <option value="">— اختر العيادة —</option>
-                {CLINIC_TYPES.map((c) => (
-                  <option key={c} value={c}>
-                    {CLINIC_LABELS[c]}
-                  </option>
-                ))}
-              </Select>
-              <Input
-                label="الاسم الكامل"
-                value={walkIn.full_name}
-                onChange={(e) => setWalkIn((w) => ({ ...w, full_name: e.target.value }))}
-                placeholder="كما سيظهر في النظام والصيدلية"
-                required
-                autoComplete="name"
-              />
-              <Input
-                label="رقم الجوال"
-                value={walkIn.phone}
-                onChange={(e) => setWalkIn((w) => ({ ...w, phone: e.target.value }))}
-                placeholder="اختياري"
-                dir="ltr"
-                className="text-end"
-              />
-              <Input
-                label="رقم الهوية / بطاقة"
-                value={walkIn.national_id}
-                onChange={(e) => setWalkIn((w) => ({ ...w, national_id: e.target.value }))}
-                placeholder="اختياري"
-                dir="ltr"
-                className="text-end"
-              />
-              <Input
-                label="تاريخ الميلاد"
-                type="date"
-                value={walkIn.date_of_birth}
-                onChange={(e) => setWalkIn((w) => ({ ...w, date_of_birth: e.target.value }))}
-              />
-              <Select
-                label="الجنس"
-                value={walkIn.gender}
-                onChange={(e) => setWalkIn((w) => ({ ...w, gender: e.target.value }))}
-              >
-                <option value="">— غير محدد —</option>
-                <option value="male">ذكر</option>
-                <option value="female">أنثى</option>
-              </Select>
-              <div className="flex flex-col gap-2 border-t border-slate-100 pt-4">
-                <Button
-                  type="submit"
-                  disabled={walkInSaving}
-                  className="min-h-11 w-full touch-manipulation gap-2"
-                >
-                  <UserPlus className="h-4 w-4" />
-                  {walkInSaving ? 'جاري التسجيل…' : 'تسجيل المراجع وإصدار رقم الدور'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="min-h-11 w-full touch-manipulation"
-                  onClick={() => setWalkInDrawerOpen(false)}
-                >
-                  إلغاء
-                </Button>
-              </div>
-            </form>
-          </div>
-        </aside>
       </div>
 
       {loading ? (
@@ -463,7 +253,9 @@ export default function ClinicWorkspace() {
                                     ? 'warning'
                                     : r.status === 'in_service'
                                       ? 'info'
-                                      : 'default'
+                                      : r.status === 'no_show'
+                                        ? 'default'
+                                        : 'default'
                                 }
                               >
                                 {queueStatusLabel(r.status)}
@@ -772,7 +564,7 @@ function ClinicDetailPanel({
   }
 
   function openLabReferralPicker() {
-    const exists = referrals.some((r) => r.department === 'lab' && r.status !== 'completed')
+    const exists = referrals.some((r) => r.department === 'lab' && !referralClosed(r.status))
     if (exists) {
       toast.error('يوجد تحويل للمخبر لم يُغلق بعد')
       return
@@ -791,7 +583,7 @@ function ClinicDetailPanel({
   }
 
   async function submitLabReferral() {
-    const exists = referrals.some((r) => r.department === 'lab' && r.status !== 'completed')
+    const exists = referrals.some((r) => r.department === 'lab' && !referralClosed(r.status))
     if (exists) {
       toast.error('يوجد تحويل للمخبر لم يُغلق بعد')
       return
@@ -831,7 +623,7 @@ function ClinicDetailPanel({
   }
 
   async function createErReferral() {
-    const exists = referrals.some((r) => r.department === 'er' && r.status !== 'completed')
+    const exists = referrals.some((r) => r.department === 'er' && !referralClosed(r.status))
     if (exists) {
       toast.error('يوجد تحويل لهذا القسم لم يُغلق بعد')
       return
@@ -913,6 +705,27 @@ function ClinicDetailPanel({
               إنهاء الزيارة
             </Button>
           ) : null}
+          {row.status === 'waiting' || row.status === 'called' || row.status === 'in_service' ? (
+            <Button
+              type="button"
+              disabled={busy}
+              variant="secondary"
+              className="min-h-11 w-full touch-manipulation border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100 sm:w-auto"
+              onClick={() => void setStatus('no_show')}
+            >
+              لم يأتِ — تخطي الدور (يُخفى من الشاشة)
+            </Button>
+          ) : null}
+          {row.status === 'no_show' ? (
+            <Button
+              type="button"
+              disabled={busy}
+              className="min-h-11 w-full touch-manipulation sm:w-auto"
+              onClick={() => void setStatus('waiting')}
+            >
+              إرجاع إلى الانتظار (عند حضور المريض)
+            </Button>
+          ) : null}
         </div>
         <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50 p-4 text-sm">
           <p className="flex items-center gap-2 font-semibold text-slate-900">
@@ -939,8 +752,8 @@ function ClinicDetailPanel({
             </>
           ) : (
             <p className="text-amber-800">
-              لم تُحمّل بيانات المريض من النظام. إن كان المراجع لم يُسجَّل بعد، استخدم زر «تسجيل مراجع بدون حجز مسبق»
-              في أعلى الصفحة لفتح نموذج التسجيل.
+              لم تُحمّل بيانات المريض من النظام. إن كان المراجع لم يُسجَّل بعد، افتح صفحة «تسجيل مراجع» من القائمة
+              الجانبية ثم أكمل التسجيل.
             </p>
           )}
           <p className="border-t border-slate-200 pt-2 text-xs text-slate-500">
@@ -1124,7 +937,7 @@ function ClinicDetailPanel({
           <Button
             type="button"
             variant="secondary"
-            disabled={busy || referrals.some((r) => r.department === 'lab' && r.status !== 'completed')}
+            disabled={busy || referrals.some((r) => r.department === 'lab' && !referralClosed(r.status))}
             className="min-h-11 w-full touch-manipulation gap-2 sm:w-auto"
             onClick={() => openLabReferralPicker()}
           >
@@ -1217,9 +1030,11 @@ function ClinicDetailPanel({
               className={`rounded-xl border px-4 py-3 ${
                 latestLabReferral.status === 'completed'
                   ? 'border-emerald-300 bg-gradient-to-br from-emerald-50 to-teal-50/80'
-                  : latestLabReferral.status === 'in_progress'
-                    ? 'border-sky-300 bg-sky-50/90'
-                    : 'border-amber-200 bg-amber-50/80'
+                  : latestLabReferral.status === 'no_show'
+                    ? 'border-slate-300 bg-slate-100/90'
+                    : latestLabReferral.status === 'in_progress'
+                      ? 'border-sky-300 bg-sky-50/90'
+                      : 'border-amber-200 bg-amber-50/80'
               }`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1231,9 +1046,11 @@ function ClinicDetailPanel({
                   tone={
                     latestLabReferral.status === 'completed'
                       ? 'success'
-                      : latestLabReferral.status === 'in_progress'
-                        ? 'info'
-                        : 'warning'
+                      : latestLabReferral.status === 'no_show'
+                        ? 'default'
+                        : latestLabReferral.status === 'in_progress'
+                          ? 'info'
+                          : 'warning'
                   }
                 >
                   {referralStatusLabel(latestLabReferral.status)}
@@ -1269,6 +1086,10 @@ function ClinicDetailPanel({
                     <p className="mt-2 text-xs text-amber-800">لم يُسجَّل نص نتائج في النظام.</p>
                   )}
                 </>
+              ) : latestLabReferral.status === 'no_show' ? (
+                <p className="mt-3 text-sm text-slate-700">
+                  سُجِّل عدم حضور المريض للمخبر. يمكن للمخبر إعادة الطلب إلى «معلّق» من شاشة المخبر عند وصوله.
+                </p>
               ) : (
                 <p className="mt-3 text-sm text-slate-700">
                   {latestLabReferral.status === 'pending'
@@ -1296,9 +1117,11 @@ function ClinicDetailPanel({
                 tone={
                   latestErReferral.status === 'completed'
                     ? 'success'
-                    : latestErReferral.status === 'in_progress'
-                      ? 'info'
-                      : 'warning'
+                    : latestErReferral.status === 'no_show'
+                      ? 'default'
+                      : latestErReferral.status === 'in_progress'
+                        ? 'info'
+                        : 'warning'
                 }
               >
                 {referralStatusLabel(latestErReferral.status)}

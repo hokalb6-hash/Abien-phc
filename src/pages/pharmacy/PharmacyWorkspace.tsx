@@ -4,10 +4,11 @@ import { CalendarClock, Package, Pill, RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Medication, Patient, Prescription, Queue } from '../../types/db'
 import { todayAdenYMD } from '../../utils/adenCalendar'
-import { clinicTypeLabel, formatDateTime } from '../../utils/format'
+import { clinicTypeLabel, formatDateTime, queueStatusLabel } from '../../utils/format'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
+import { Select } from '../../components/ui/Select'
 
 type RxRow = Prescription & {
   medications: Medication | null
@@ -29,6 +30,8 @@ export default function PharmacyWorkspace() {
   const [rows, setRows] = useState<RxRow[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [listMode, setListMode] = useState<'awaiting' | 'no_show'>('awaiting')
+  const [queueBusyId, setQueueBusyId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -65,6 +68,9 @@ export default function PharmacyWorkspace() {
     for (const [queueId, items] of map) {
       const q = items[0]?.queues
       if (!q) continue
+      const isNoShow = q.status === 'no_show'
+      if (listMode === 'no_show' && !isNoShow) continue
+      if (listMode === 'awaiting' && isNoShow) continue
       list.push({
         queueId,
         queue: q,
@@ -74,7 +80,7 @@ export default function PharmacyWorkspace() {
     }
     list.sort((a, b) => a.queue.queue_number - b.queue.queue_number)
     return list
-  }, [rows])
+  }, [rows, listMode])
 
   useEffect(() => {
     void load()
@@ -91,6 +97,42 @@ export default function PharmacyWorkspace() {
       void supabase.removeChannel(ch)
     }
   }, [load])
+
+  useEffect(() => {
+    const ch = supabase
+      .channel('pharmacy-queues')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'queues' }, () => {
+        void load()
+      })
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(ch)
+    }
+  }, [load])
+
+  async function setQueueAttendance(queueId: string, status: Queue['status']) {
+    setQueueBusyId(queueId)
+    try {
+      const { error } = await supabase
+        .from('queues')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', queueId)
+      if (error) {
+        if (error.message.includes('queues_status_check') || error.code === '23514') {
+          toast.error(
+            'قاعدة البيانات لا تدعم حالة «لم يحضر» بعد. نفّذ الملف supabase/patch_queue_no_show.sql في SQL Editor.',
+          )
+        } else {
+          toast.error(error.message)
+        }
+        return
+      }
+      toast.success(status === 'no_show' ? 'تم تعليم المريض كعدم حضور للصرف' : 'تم إرجاع المريض إلى قائمة الانتظار')
+      void load()
+    } finally {
+      setQueueBusyId(null)
+    }
+  }
 
   async function markDispensed(id: string) {
     setBusyId(id)
@@ -125,22 +167,37 @@ export default function PharmacyWorkspace() {
             وصفات اليوم مجمّعة حسب زيارة المريض — عرض واضح للجرعات وجاهزية الصرف
           </p>
         </div>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => void load()}
-          className="min-h-11 w-full touch-manipulation gap-2 sm:w-auto sm:min-h-0 sm:self-start"
-        >
-          <RefreshCw className="h-4 w-4" />
-          تحديث
-        </Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
+          <Select
+            label="قائمة الصرف"
+            className="w-full min-w-0 sm:w-56"
+            value={listMode}
+            onChange={(e) => setListMode(e.target.value as typeof listMode)}
+          >
+            <option value="awaiting">بانتظار حضور المريض</option>
+            <option value="no_show">لم يأتِ للصرف (مخفي من الشاشة)</option>
+          </Select>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void load()}
+            className="min-h-11 w-full touch-manipulation gap-2 sm:w-auto sm:min-h-0 sm:self-end"
+          >
+            <RefreshCw className="h-4 w-4" />
+            تحديث
+          </Button>
+        </div>
       </header>
 
       <Card title="وصفات بانتظار الصرف">
         {loading ? (
           <p className="text-slate-500">جاري التحميل…</p>
         ) : groups.length === 0 ? (
-          <p className="text-slate-500">لا توجد وصفات معلّقة.</p>
+          <p className="text-slate-500">
+            {listMode === 'no_show'
+              ? 'لا يوجد مرضى مُعلَّمون كعدم حضور للصرف.'
+              : 'لا توجد وصفات معلّقة.'}
+          </p>
         ) : (
           <div className="space-y-6">
             {groups.map((g) => (
@@ -171,8 +228,33 @@ export default function PharmacyWorkspace() {
                     <Badge tone="info" className="tabular-nums text-base font-bold tracking-wide">
                       دور {g.queue.queue_number}
                     </Badge>
+                    <Badge tone={g.queue.status === 'no_show' ? 'default' : 'warning'} className="text-xs">
+                      {queueStatusLabel(g.queue.status)}
+                    </Badge>
                   </div>
                 </header>
+                <div className="border-b border-slate-100 bg-amber-50/40 px-3 py-2 sm:px-4">
+                  {listMode === 'awaiting' ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={queueBusyId === g.queueId}
+                      className="min-h-10 w-full touch-manipulation border-amber-300 bg-white text-sm text-amber-950 hover:bg-amber-50 sm:w-auto"
+                      onClick={() => void setQueueAttendance(g.queueId, 'no_show')}
+                    >
+                      {queueBusyId === g.queueId ? '…' : 'لم يأتِ — لم يحضر المريض للصرف (يُخفى من شاشة الدور)'}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      disabled={queueBusyId === g.queueId}
+                      className="min-h-10 w-full touch-manipulation text-sm sm:w-auto"
+                      onClick={() => void setQueueAttendance(g.queueId, 'waiting')}
+                    >
+                      {queueBusyId === g.queueId ? '…' : 'إرجاع إلى الانتظار (عند حضور المريض لاستكمال الصرف)'}
+                    </Button>
+                  )}
+                </div>
                 <ul className="divide-y divide-slate-100 p-2 sm:p-3">
                   {g.items.map((rx) => {
                     const m = rx.medications

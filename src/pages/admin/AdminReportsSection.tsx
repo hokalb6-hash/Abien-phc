@@ -23,6 +23,7 @@ function referralStatusLabel(status: string): string {
     pending: 'معلق',
     in_progress: 'قيد التنفيذ',
     completed: 'مكتمل',
+    no_show: 'لم يحضر',
   }
   return map[status] ?? status
 }

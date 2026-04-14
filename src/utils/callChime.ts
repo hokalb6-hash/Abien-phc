@@ -68,3 +68,42 @@ export function playCallChime(): void {
     /* متصفحات بدون Web Audio أو سياسة تشغيل */
   }
 }
+
+/** نغمة ترحيب قصيرة (ثلاث نغمات صاعدة) — يُفضّل استدعاء primeCallAudioInUserGesture قبل await في معالج النقر */
+function playWelcomeOscillatorSequence(ctx: AudioContext): void {
+  const freqs = [523.25, 659.25, 783.99]
+  let t = ctx.currentTime
+  for (const f of freqs) {
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(f, t)
+    gain.gain.setValueAtTime(0.0001, t)
+    gain.gain.exponentialRampToValueAtTime(0.09, t + 0.025)
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.2)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start(t)
+    osc.stop(t + 0.22)
+    t += 0.11
+  }
+}
+
+export function playWelcomeChime(): void {
+  try {
+    const ctx = getCtx()
+    if (!ctx) return
+
+    const tryPlay = () => {
+      if (ctx.state !== 'running') return
+      playWelcomeOscillatorSequence(ctx)
+    }
+
+    tryPlay()
+    if (ctx.state === 'suspended') {
+      void ctx.resume().then(tryPlay).catch(() => {})
+    }
+  } catch {
+    /* ignore */
+  }
+}

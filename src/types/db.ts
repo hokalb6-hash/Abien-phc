@@ -29,9 +29,11 @@ export type QueueStatus =
   | 'in_service'
   | 'completed'
   | 'cancelled'
+  /** لم يحضر — يُخفى من شاشة الدور ويُستأنف من العيادة/الصيدلية عند الحضور */
+  | 'no_show'
 
 /** حالة التحويل (مخبر / إسعاف) */
-export type ReferralStatus = 'pending' | 'in_progress' | 'completed'
+export type ReferralStatus = 'pending' | 'in_progress' | 'completed' | 'no_show'
 
 export interface Database {
   public: {

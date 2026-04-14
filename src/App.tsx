@@ -7,6 +7,8 @@ import Login from './pages/auth/Login'
 import PatientCheckIn from './pages/check-in/PatientCheckIn'
 import QueueDisplay from './pages/queue-display/QueueDisplay'
 import ClinicWorkspace from './pages/clinics/ClinicWorkspace'
+import ClinicSearchPage from './pages/clinics/ClinicSearchPage'
+import ClinicWalkInPage from './pages/clinics/ClinicWalkInPage'
 import LabWorkspace from './pages/lab/LabWorkspace'
 import ERWorkspace from './pages/er/ERWorkspace'
 import PharmacyWorkspace from './pages/pharmacy/PharmacyWorkspace'
@@ -70,6 +72,22 @@ export default function App() {
           element={
             <ProtectedRoute roles={['clinic', 'admin']}>
               <ClinicWorkspace />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="clinic/search"
+          element={
+            <ProtectedRoute roles={['clinic', 'admin']}>
+              <ClinicSearchPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="clinic/walk-in"
+          element={
+            <ProtectedRoute roles={['clinic', 'admin']}>
+              <ClinicWalkInPage />
             </ProtectedRoute>
           }
         />

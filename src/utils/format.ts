@@ -26,6 +26,7 @@ export function queueStatusLabel(status: string): string {
     in_service: 'قيد الكشف',
     completed: 'مكتمل',
     cancelled: 'ملغى',
+    no_show: 'لم يحضر (مُخفى من الشاشة)',
   }
   return map[status] ?? status
 }
@@ -47,6 +48,7 @@ export function referralStatusLabel(status: string): string {
     pending: 'معلق',
     in_progress: 'قيد التنفيذ',
     completed: 'مكتمل',
+    no_show: 'لم يحضر',
   }
   return map[status] ?? status
 }

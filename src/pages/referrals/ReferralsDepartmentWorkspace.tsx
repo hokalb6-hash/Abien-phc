@@ -1,10 +1,10 @@
-import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { toast } from 'react-hot-toast'
 import { RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Patient, Queue, Referral } from '../../types/db'
 import { todayAdenYMD } from '../../utils/adenCalendar'
-import { clinicTypeLabel, formatDateTime, queueStatusLabel } from '../../utils/format'
+import { clinicTypeLabel, formatDateTime, queueStatusLabel, referralStatusLabel } from '../../utils/format'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
@@ -21,16 +21,11 @@ type ReferralRow = Referral & {
     | null
 }
 
-const statusTone: Record<Referral['status'], 'warning' | 'info' | 'success'> = {
+const statusTone: Record<Referral['status'], 'warning' | 'info' | 'success' | 'default'> = {
   pending: 'warning',
   in_progress: 'info',
   completed: 'success',
-}
-
-const referralStatusAr: Record<Referral['status'], string> = {
-  pending: 'معلق',
-  in_progress: 'قيد التنفيذ',
-  completed: 'مكتمل',
+  no_show: 'default',
 }
 
 export function ReferralsDepartmentWorkspace({
@@ -56,6 +51,7 @@ export function ReferralsDepartmentWorkspace({
   const [walkInName, setWalkInName] = useState('')
   const [walkInPhone, setWalkInPhone] = useState('')
   const [walkInSaving, setWalkInSaving] = useState(false)
+  const [listFilter, setListFilter] = useState<'active' | 'completed' | 'no_show' | 'all'>('active')
 
   const requireServiceToComplete = Boolean(completionServiceCatalog?.length)
   const isLab = department === 'lab'
@@ -82,6 +78,13 @@ export function ReferralsDepartmentWorkspace({
       setLoading(false)
     }
   }, [department])
+
+  const filteredRows = useMemo(() => {
+    if (listFilter === 'all') return rows
+    if (listFilter === 'active') return rows.filter((r) => r.status === 'pending' || r.status === 'in_progress')
+    if (listFilter === 'completed') return rows.filter((r) => r.status === 'completed')
+    return rows.filter((r) => r.status === 'no_show')
+  }, [rows, listFilter])
 
   useEffect(() => {
     void load()
@@ -248,15 +251,28 @@ export function ReferralsDepartmentWorkspace({
           <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">{title}</h1>
           <p className="mt-1 hidden text-slate-600 sm:block sm:max-w-2xl sm:text-[15px]">{subtitle}</p>
         </div>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => void load()}
-          className="min-h-11 w-full touch-manipulation gap-2 sm:w-auto sm:min-h-0 sm:self-start"
-        >
-          <RefreshCw className="h-4 w-4" />
-          تحديث
-        </Button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
+          <Select
+            label="عرض القائمة"
+            className="w-full min-w-0 sm:w-56"
+            value={listFilter}
+            onChange={(e) => setListFilter(e.target.value as typeof listFilter)}
+          >
+            <option value="active">قيد العمل (معلق / تنفيذ)</option>
+            <option value="completed">مكتملة</option>
+            <option value="no_show">لم يحضر المريض</option>
+            <option value="all">الكل</option>
+          </Select>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void load()}
+            className="min-h-11 w-full touch-manipulation gap-2 sm:w-auto sm:min-h-0 sm:self-end"
+          >
+            <RefreshCw className="h-4 w-4" />
+            تحديث
+          </Button>
+        </div>
       </header>
 
       {department === 'er' ? (
@@ -298,12 +314,12 @@ export function ReferralsDepartmentWorkspace({
       <Card title="التحويلات الواردة">
         {loading ? (
           <p className="text-slate-500">جاري التحميل…</p>
-        ) : rows.length === 0 ? (
-          <p className="text-slate-500">لا توجد تحويلات حالياً.</p>
+        ) : filteredRows.length === 0 ? (
+          <p className="text-slate-500">لا توجد تحويلات مطابقة للفلتر.</p>
         ) : (
           <>
             <div className="space-y-3 lg:hidden">
-              {rows.map((r) => {
+              {filteredRows.map((r) => {
                 const q = r.queues
                 const p = q?.patients
                 const b = busyId === r.id
@@ -323,7 +339,7 @@ export function ReferralsDepartmentWorkspace({
                         <span className="text-lg font-black tabular-nums text-teal-800">
                           {q?.queue_number ?? '—'}
                         </span>
-                        <Badge tone={statusTone[r.status]}>{referralStatusAr[r.status]}</Badge>
+                        <Badge tone={statusTone[r.status]}>{referralStatusLabel(r.status)}</Badge>
                       </div>
                     </div>
                     <p className="mt-2 text-xs text-slate-500">
@@ -359,6 +375,10 @@ export function ReferralsDepartmentWorkspace({
                             >
                               {r.lab_results?.trim() || '—'}
                             </pre>
+                          ) : r.status === 'no_show' ? (
+                            <p id={`m-lab-${r.id}`} className="text-sm text-slate-600">
+                              لا إدخال نتائج — الطلب مُعلَّم كعدم حضور. استخدم «إرجاع إلى المعلّق» عند وصول المريض.
+                            </p>
                           ) : (
                             <textarea
                               id={`m-lab-${r.id}`}
@@ -455,6 +475,27 @@ export function ReferralsDepartmentWorkspace({
                           إكمال مباشر
                         </Button>
                       ) : null}
+                      {r.status === 'pending' || r.status === 'in_progress' ? (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={b}
+                          className="min-h-11 w-full touch-manipulation border-amber-300 bg-amber-50 text-amber-950 hover:bg-amber-100"
+                          onClick={() => void setStatus(r.id, 'no_show')}
+                        >
+                          لم يأتِ — لم يحضر المريض
+                        </Button>
+                      ) : null}
+                      {r.status === 'no_show' ? (
+                        <Button
+                          type="button"
+                          disabled={b}
+                          className="min-h-11 w-full touch-manipulation"
+                          onClick={() => void setStatus(r.id, 'pending')}
+                        >
+                          إرجاع إلى المعلّق (عند حضور المريض)
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 )
@@ -476,7 +517,7 @@ export function ReferralsDepartmentWorkspace({
                   </Tr>
                 </THead>
                 <TBody>
-              {rows.map((r) => {
+              {filteredRows.map((r) => {
                 const q = r.queues
                 const p = q?.patients
                 const b = busyId === r.id
@@ -489,7 +530,7 @@ export function ReferralsDepartmentWorkspace({
                       <Td>{q ? clinicTypeLabel(q.clinic_type) : '—'}</Td>
                       <Td>{q ? queueStatusLabel(q.status) : '—'}</Td>
                       <Td>
-                        <Badge tone={statusTone[r.status]}>{referralStatusAr[r.status]}</Badge>
+                        <Badge tone={statusTone[r.status]}>{referralStatusLabel(r.status)}</Badge>
                       </Td>
                       {isLab ? (
                         <Td className="max-w-[220px] align-top">
@@ -584,6 +625,27 @@ export function ReferralsDepartmentWorkspace({
                               إكمال مباشر
                             </Button>
                           ) : null}
+                          {r.status === 'pending' || r.status === 'in_progress' ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={b}
+                              className="touch-manipulation border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-950 hover:bg-amber-100 sm:min-h-0"
+                              onClick={() => void setStatus(r.id, 'no_show')}
+                            >
+                              لم يأتِ
+                            </Button>
+                          ) : null}
+                          {r.status === 'no_show' ? (
+                            <Button
+                              type="button"
+                              disabled={b}
+                              className="touch-manipulation px-2 py-1 text-xs sm:min-h-0"
+                              onClick={() => void setStatus(r.id, 'pending')}
+                            >
+                              إرجاع للمعلّق
+                            </Button>
+                          ) : null}
                         </div>
                       </Td>
                     </Tr>
@@ -624,6 +686,10 @@ export function ReferralsDepartmentWorkspace({
                                 >
                                   {r.lab_results?.trim() || '—'}
                                 </pre>
+                              ) : r.status === 'no_show' ? (
+                                <p id={`lab-results-${r.id}`} className="text-sm text-slate-600">
+                                  لا إدخال نتائج — الطلب مُعلَّم كعدم حضور. استخدم «إرجاع للمعلّق» عند وصول المريض.
+                                </p>
                               ) : (
                                 <textarea
                                   id={`lab-results-${r.id}`}

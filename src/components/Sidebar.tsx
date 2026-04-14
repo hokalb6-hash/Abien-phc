@@ -4,7 +4,9 @@ import {
   LayoutDashboard,
   Monitor,
   Pill,
+  Search,
   Stethoscope,
+  UserPlus,
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { BrandMark } from './BrandMark'
@@ -16,6 +18,8 @@ type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; roles:
 const items: NavItem[] = [
   { to: '/admin', label: 'الإدارة', icon: LayoutDashboard, roles: ['admin'] },
   { to: '/clinic', label: 'العيادات', icon: Stethoscope, roles: ['clinic', 'admin'] },
+  { to: '/clinic/search', label: 'البحث', icon: Search, roles: ['clinic', 'admin'] },
+  { to: '/clinic/walk-in', label: 'تسجيل مراجع', icon: UserPlus, roles: ['clinic', 'admin'] },
   { to: '/lab', label: 'المخبر', icon: FlaskConical, roles: ['lab', 'admin'] },
   { to: '/er', label: 'الإسعاف', icon: Activity, roles: ['er', 'admin'] },
   { to: '/pharmacy', label: 'الصيدلية', icon: Pill, roles: ['pharmacy', 'admin'] },
@@ -33,12 +37,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const visible = items.filter((i) => role && i.roles.includes(role))
 
   return (
-    <aside className="h-full w-60 shrink-0 border-e border-slate-200 bg-white">
-      <div className="flex h-14 items-center gap-2 border-b border-slate-200 px-3">
+    <aside className="flex h-full w-60 shrink-0 flex-col border-e border-slate-200 bg-white">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 px-3">
         <BrandMark size={34} className="rounded-lg" />
         <span className="truncate text-lg font-bold text-teal-700">أبين الصحي</span>
       </div>
-      <nav className="flex flex-col gap-1 p-3">
+      <nav className="shrink-0 flex flex-col gap-1 p-3">
         {visible.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}

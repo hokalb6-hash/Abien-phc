@@ -39,7 +39,7 @@ create table if not exists public.queues (
   patient_id uuid not null references public.patients (id) on delete restrict,
   clinic_type text not null,
   status text not null default 'waiting'
-    check (status in ('waiting', 'called', 'in_service', 'completed', 'cancelled')),
+    check (status in ('waiting', 'called', 'in_service', 'completed', 'cancelled', 'no_show')),
   queue_number integer not null default 0,
   /** يوم تقديم الخدمة (توقيت أبين سمعان — Asia/Aden): للمريض anon يُفرض غداً؛ للموظف الافتراضي اليوم */
   service_date date not null default ((timezone('Asia/Aden', now()))::date),
@@ -229,7 +229,7 @@ create table if not exists public.referrals (
   department text not null,
   from_department text,
   status text not null default 'pending'
-    check (status in ('pending', 'in_progress', 'completed')),
+    check (status in ('pending', 'in_progress', 'completed', 'no_show')),
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz
@@ -403,6 +403,20 @@ create policy "auth_update_queues_staff"
   using (public.has_role (array['admin','clinic','reception']))
   with check (public.has_role (array['admin','clinic','reception']));
 
+/** الصيدلية: تعليم «لم يأتِ» أو إرجاع الحالة لصف مرتبط بوصفات */
+drop policy if exists "auth_update_queues_pharmacy_attendance" on public.queues;
+create policy "auth_update_queues_pharmacy_attendance"
+  on public.queues for update
+  to authenticated
+  using (
+    public.has_role (array['admin','pharmacy'])
+    and exists (select 1 from public.prescriptions pr where pr.queue_id = queues.id)
+  )
+  with check (
+    public.has_role (array['admin','pharmacy'])
+    and exists (select 1 from public.prescriptions pr where pr.queue_id = queues.id)
+  );
+
 -- مرضى: للطاقم
 drop policy if exists "auth_select_patients" on public.patients;
 create policy "auth_select_patients"
@@ -427,7 +441,7 @@ create policy "anon_select_queues_display"
   to anon
   using (
     service_date = (timezone('Asia/Aden', now()))::date
-    and status in ('waiting', 'called', 'in_service')
+    and status in ('waiting', 'called', 'in_service', 'no_show')
   );
 
 drop policy if exists "anon_select_patients_display_queue" on public.patients;
@@ -439,7 +453,7 @@ create policy "anon_select_patients_display_queue"
       select 1 from public.queues q
       where q.patient_id = patients.id
         and q.service_date = (timezone('Asia/Aden', now()))::date
-        and q.status in ('waiting', 'called', 'in_service')
+        and q.status in ('waiting', 'called', 'in_service', 'no_show')
     )
   );
 

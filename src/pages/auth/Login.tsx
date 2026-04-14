@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast'
 import { SITE_DEVELOPER_CREDIT_AR } from '../../constants/brand'
 import { STAFF_ENTRY_CODE, STAFF_GATE_STORAGE_KEY } from '../../constants/staffGate'
 import { defaultPathForRole, useAuthStore } from '../../store/authStore'
+import { playWelcomeChime, primeCallAudioInUserGesture } from '../../utils/callChime'
 import { BrandMark } from '../../components/BrandMark'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
@@ -53,13 +54,22 @@ export default function Login() {
       return
     }
     setSubmitting(true)
+    /** يبقي Web Audio ضمن تفاعل المستخدم قبل أي await */
+    primeCallAudioInUserGesture()
     const { error } = await signIn(email, password)
     setSubmitting(false)
     if (error) {
       toast.error(error.message)
       return
     }
-    toast.success('تم تسجيل الدخول')
+    const { profile, user: signedUser } = useAuthStore.getState()
+    const displayName = profile?.full_name?.trim() || signedUser?.email?.split('@')[0] || ''
+    toast.success(
+      displayName
+        ? `أهلاً بك، ${displayName} — نتمنى لك يوماً سهلاً`
+        : 'أهلاً بك — نتمنى لك يوماً سهلاً',
+    )
+    playWelcomeChime()
     navigate(defaultPathForRole(useAuthStore.getState().role), { replace: true })
   }
 
