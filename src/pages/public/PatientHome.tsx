@@ -11,12 +11,7 @@ import { BrandMark } from '../../components/BrandMark'
 import { PatientAnnouncementBanner } from '../../components/PatientAnnouncementBanner'
 import { Card } from '../../components/ui/Card'
 import { SITE_DEVELOPER_CREDIT_AR } from '../../constants/brand'
-import { isSupabaseConfigured } from '../../lib/supabase'
 
-/**
- * صور محلية من مجلد `public/landing/` — تُعرض دائماً مع الموقع دون الاعتماد على الإنترنت.
- * (مأخوذة أصلاً من Unsplash — أطباء ذكور في سياق عيادي.)
- */
 const IMG = {
   hero: `${import.meta.env.BASE_URL}landing/hero-doctor.jpg`,
   care: `${import.meta.env.BASE_URL}landing/care-consultation.jpg`,
@@ -57,18 +52,6 @@ export default function PatientHome() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <PatientAnnouncementBanner />
-
-      {!isSupabaseConfigured ? (
-        <div
-          className="border-b border-amber-500/30 bg-amber-950/80 px-4 py-3 text-center text-sm text-amber-100"
-          role="status"
-        >
-          <strong>وضع المعاينة:</strong> لم يُعثر على ملف <code className="rounded bg-amber-900/60 px-1">.env</code> أو مفاتيح
-          Supabase. أضف <code className="rounded bg-amber-900/60 px-1">VITE_SUPABASE_URL</code> و
-          <code className="rounded bg-amber-900/60 px-1">VITE_SUPABASE_ANON_KEY</code> ثم أعد تشغيل{' '}
-          <code className="rounded bg-amber-900/60 px-1">npm run dev</code> ليعمل الحجز والدخول.
-        </div>
-      ) : null}
 
       {/* ——— Hero ——— */}
       <section className="relative isolate overflow-hidden">
@@ -278,19 +261,6 @@ export default function PatientHome() {
 
       <footer className="space-y-3 border-t border-white/5 px-4 py-6 text-center text-xs text-slate-600">
         <p className="font-medium text-slate-500">{SITE_DEVELOPER_CREDIT_AR}</p>
-        <p>
-          الصور مُخزَّنة مع الموقع في مجلد <code className="text-slate-500">public/landing</code> لتظهر حتى دون اتصال
-          خارجي؛ المصدر الأصلي للتصوير المخزَّن:{' '}
-          <a
-            href="https://unsplash.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-slate-500 underline decoration-slate-700 underline-offset-2 transition hover:text-slate-400"
-          >
-            Unsplash
-          </a>
-          .
-        </p>
       </footer>
     </div>
   )

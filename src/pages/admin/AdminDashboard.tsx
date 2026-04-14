@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Activity, FlaskConical, LayoutDashboard, Monitor, Pill, Stethoscope, Users } from 'lucide-react'
+import { Activity, FlaskConical, LayoutDashboard, Monitor, Pill, Stethoscope } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { todayAdenYMD } from '../../utils/adenCalendar'
 import { Badge } from '../../components/ui/Badge'
@@ -119,10 +119,6 @@ export default function AdminDashboard() {
       <section>
         <h2 className="mb-4 text-lg font-semibold text-slate-800">البيانات المرجعية وسجل التدقيق</h2>
         <AdminReferenceData />
-        <p className="mt-6 flex items-center gap-2 text-sm text-slate-500">
-          <Users className="h-4 w-4 shrink-0" aria-hidden />
-          حذف المستخدمين يتم من لوحة Supabase → Authentication إن لزم.
-        </p>
       </section>
     </div>
   )

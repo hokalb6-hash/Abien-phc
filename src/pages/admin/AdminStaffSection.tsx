@@ -88,7 +88,7 @@ export function AdminStaffSection({ onStaffChanged }: Props) {
       }
 
       if (!data.user?.id) {
-        toast.error('لم يُرجع النظام معرف المستخدم. تحقق من تأكيد البريد في إعدادات Supabase.')
+        toast.error('لم يُرجع النظام معرف المستخدم. تحقق من إعدادات تأكيد البريد.')
         return
       }
 
@@ -135,11 +135,6 @@ export function AdminStaffSection({ onStaffChanged }: Props) {
   return (
     <div className="min-w-0 space-y-8">
       <Card title="إضافة موظف جديد">
-        <p className="mb-4 text-sm text-slate-600">
-          يُنشأ حساب في <strong>Authentication</strong> ثم يُحدَّد الدور في <code className="rounded bg-slate-100 px-1">profiles</code>.
-          يجب أن يكون <strong>تسجيل البريد مفعّلاً</strong> في Supabase (Authentication → Providers → Email).
-          إن طُلب تأكيد البريد، أكمِل التأكيد من رسالة البريد قبل أول دخول.
-        </p>
         <form onSubmit={(e) => void handleCreateStaff(e)} className="grid max-w-xl gap-4">
           <Input
             label="الاسم الظاهر في النظام"
